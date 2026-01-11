@@ -1,7 +1,4 @@
 from django.db import models
-from django.db.models import Q, CheckConstraint, F, UniqueConstraint
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.core.exceptions import ValidationError
 
 
 
