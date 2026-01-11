@@ -1,0 +1,11 @@
+.venv/
+
+__pycache__/
+*.pyc
+*.pyo
+
+# Django
+db.sqlite3
+*.log
+
+celerybeat-schedule
