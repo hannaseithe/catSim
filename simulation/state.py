@@ -64,13 +64,30 @@ class Cat:
     
     def __str__(self):
         if self.current_node is not None:
-            return f"{self.traits.name} at node #{self.current_node}"
-        else: return f"{self.traits.name} moving to node #{self.target_node}"
+            return f"{self.traits.name} (n: #{self.current_node})"
+        else: return f"{self.traits.name} -> n #{self.target_node}"
     
     def __repr__(self):
         if self.current_node is not None:
             return f"{self.traits.name} at node #{self.current_node}"
         else: return f"{self.traits.name} moving to node #{self.target_node}"
+
+    def leave(self, target_node):
+        if self.current_node == target_node:
+            raise ValueError('A cat cannot leave for the same node the cat is already at')
+        self.current_node=None
+        self.target_node = target_node
+
+    def arrive(self):
+        self.current_node =self.target_node
+        self.target_node = None
+
+    def is_on_the_edge(self):
+        return not self.current_node
+    
+    def is_at_home(self):
+        return self.current_node == self.traits.home
+    
 
 @dataclass(frozen=True)
 class Edge:
@@ -79,8 +96,11 @@ class Edge:
 
     def node_in_edge(self,node_id):
         return node_id == self.node1 or node_id == self.node2
+    
+    def other_node(self,node_id):
+        return self.node1 if self.node2 == node_id else self.node2
 
-@dataclass
+@dataclass(frozen=True)
 class Node:
     id: int
     number_of_edges: int
@@ -104,10 +124,9 @@ class Relationship:
         self.metrics: Optional[RelationshipMetrics] = None
 
     def __str__(self):
-        return f"Relationship between Cat {self.traits.cat1} and Cat {self.traits.cat2} - value: {self.value}"
+        return f"Relationship: Cat {self.traits.cat1} - Cat {self.traits.cat2}"
     
     def __repr__(self):
-
         return f"Relationship between Cat {self.traits.cat1} and Cat {self.traits.cat2} - value: {self.value}"
     
     def other_cat(self,cat1):

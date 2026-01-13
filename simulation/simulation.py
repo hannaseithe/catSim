@@ -55,7 +55,7 @@ class Simulation:
         result = []
         for edge in self.edges:
             if edge.node_in_edge(node_id):
-                result.append(edge.node1 if edge.node2 == node_id else edge.node2)
+                result.append(edge.other_node(node_id))
         return result
     
     def what_node_is_cat_at(self,cat):
@@ -183,7 +183,7 @@ class Simulation:
     def movement_step(self):
         new_cats = self.cats.copy()
         for cat in new_cats:
-            if cat.current_node is not None:
+            if not cat.is_on_the_edge():
                 edge_partners = self.get_nodes_edge_partners_no_enemy_home(cat.current_node, cat.traits.id)
                 probs = {node: 0.0 for node in edge_partners}
                 for node_id in edge_partners:
@@ -216,7 +216,7 @@ class Simulation:
 
                 #set stats for cats at nodes
                 cat.time_at_current_node += 1
-                if cat.current_node == cat.traits.home:
+                if cat.is_at_home():
                     cat.stats.iter_at_home += 1
                     if not source == "stay":
                         cat.stats.times_at_home +=1
@@ -232,14 +232,9 @@ class Simulation:
                 if source == "stay":
                     pass
                 else:
-
-                    cat.current_node = None
-                    cat.target_node = source
-                
-
+                    cat.leave(source)
             else:
-                cat.current_node= cat.target_node
-                cat.target_node = None
+                cat.arrive()
                 cat.stats.iter_on_edge += 1
                 
             cat.needs_to_run=False
