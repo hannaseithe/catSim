@@ -26,6 +26,10 @@ class SimulationParameters:
     mean_laziness:float
     var_laziness:float
 
+    def __post_init__(self):
+        if self.iterations <= 0:
+            raise ValueError("iterations must be greater than 0")
+
 class Simulation:
     def __init__(self, params: SimulationParameters):
         self.params = params
@@ -125,8 +129,6 @@ class Simulation:
 
     def generate_initial_state(self):
 
-        
-
         #Nodes
         edge_sigma = self.params.var_edges ** 0.5
         for i in range(self.params.node_amount):
@@ -220,7 +222,7 @@ class Simulation:
                     cat.stats.iter_at_home += 1
                     if not source == "stay":
                         cat.stats.times_at_home +=1
-                if self.is_neutral_node(cat.current_node,cat.traits.id):
+                elif self.is_neutral_node(cat.current_node,cat.traits.id):
                     cat.stats.iter_at_neutral += 1
                     if not source == "stay":
                         cat.stats.times_at_neutral +=1
@@ -266,9 +268,9 @@ class Simulation:
                         engaged.add(j)
                         result.append((i, j))
 
-                for cat in cats_on_node:
-                    if cat not in engaged:
-                        cat.stats.sleeps += 1
+            for cat in cats_on_node:
+                if cat not in engaged:
+                    cat.stats.sleeps += 1
 
         for pair in result:
             c1,c2 = pair
@@ -318,9 +320,9 @@ class Simulation:
                     'percent_time_spent_on_edge' : cat.stats.iter_on_edge / self.params.iterations,
                     'percent_time_spent_on_neutral_ground' : cat.stats.iter_at_neutral/ self.params.iterations,
                     'percent_time_spent_at_friends_house' : cat.stats.iter_at_friendly / self.params.iterations,
-                    'average_iter_spent_at_home' : cat.stats.iter_at_home / cat.stats.times_at_home,
-                    'average_iter_spent_at_friends_home' : cat.stats.iter_at_friendly / cat.stats.times_at_friendly,
-                    'average_iter_spent_on_neutral_node' : cat.stats.iter_at_neutral / cat.stats.times_at_neutral,
+                    'average_iter_spent_at_home' : cat.stats.iter_at_home / cat.stats.times_at_home if cat.stats.times_at_home > 0 else 0,
+                    'average_iter_spent_at_friends_home' : cat.stats.iter_at_friendly / cat.stats.times_at_friendly if cat.stats.times_at_friendly > 0 else 0,
+                    'average_iter_spent_on_neutral_node' : cat.stats.iter_at_neutral / cat.stats.times_at_neutral if cat.stats.times_at_neutral > 0 else 0,
                     'amount_of_cats_interacted_with' : len(cat.stats.interacted_with),
                     'amount_of_friends' : len(self.get_friends(cat.traits.id)),
                     'amount_of_enemies' : len(self.get_enemies(cat.traits.id)),

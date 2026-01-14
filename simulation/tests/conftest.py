@@ -1,4 +1,5 @@
 import pytest
+from simulation.simulation import Simulation, SimulationParameters
 from simulation.state import Cat, CatTraits, Edge, Node, Relationship, RelationshipTraits
 
 @pytest.fixture
@@ -25,4 +26,21 @@ def sample_node():
 @pytest.fixture
 def sample_edge():
     return Edge(0,1)
+
+@pytest.fixture
+def sample_sim():
+    kwargs= {
+        "iterations": 30,
+        "seed":1,
+        "cat_amount":3,
+        "node_amount":7,
+        "mean_edges":3,
+        "var_edges":1,
+        "mean_aggressive": 0.0,
+        "var_aggressive": 0.1,
+        "mean_laziness": 0.5,
+        "var_laziness":0.05
+    }
+    params=SimulationParameters(**kwargs)
+    return Simulation(params=params)
 

@@ -83,7 +83,7 @@ class Cat:
         self.target_node = None
 
     def is_on_the_edge(self):
-        return not self.current_node
+        return self.current_node is None
     
     def is_at_home(self):
         return self.current_node == self.traits.home
