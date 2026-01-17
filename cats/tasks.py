@@ -33,7 +33,7 @@ def run_simulation_logic(run_id):
             metrics=metrics,
         )
         run.mark_completed()
-        logger.info(f"Simulation {run.id} finished with Results: {results.id}")
+        logger.info(f"Simulation id:{run.id} finished with Results id:{results.id}")
 
     except Exception as e:
         run.mark_failed(str(e))

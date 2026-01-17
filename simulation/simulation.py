@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 from typing import Optional
 from simulation.state import (
     Cat,
@@ -17,10 +18,20 @@ lazy_weight = 0.1
 relationship_weight = 0.2
 
 
+def safe_log(x):
+    if x <= 0:
+        return 0.0
+    return math.log(x)
+
+
 @dataclass
 class SimulationMetrics:
     friendgroups_total: int
     average_size_friendgroups: int
+    largest_group_size: int
+    isolated_cats_count: int
+    mean_relationship_value: float
+    interaction_density: float
 
 
 @dataclass(frozen=True)
@@ -41,6 +52,11 @@ class SimulationParameters:
             raise ValueError("iterations must be greater than 0")
 
 
+@dataclass
+class SimulationStats:
+    total_number_interactions: int = 0
+
+
 class Simulation:
     def __init__(self, params: SimulationParameters):
         self.params = params
@@ -51,6 +67,7 @@ class Simulation:
         self.relationships: dict[tuple[int, int], Relationship] = {}
         self.edges: list[Edge] = []
         self.nodes: list[Node] = []
+        self.stats = SimulationStats()
 
         self.metrics: Optional[SimulationMetrics] = None
 
@@ -316,6 +333,10 @@ class Simulation:
                 cat1.traits.aggressive + cat2.traits.aggressive + rel.value
             )
             rel.stats.absolute_delta += 0.05
+            self.stats.total_number_interactions += 1
+            rel.stats.interacted = True
+            if rel.value == 0:
+                rel.stats.number_of_sign_flips += 1
             if interaction_value > 0:
                 cat1.stats.fights += 1
                 cat1.stats.interacted_with.add(c2)
@@ -327,6 +348,8 @@ class Simulation:
                     cat1.needs_to_run = True
                 rel.value += 0.05
                 rel.value = min(1, rel.value)
+                if rel.value > rel.stats.max_value:
+                    rel.stats.max_value = rel.value
             else:
                 cat1.stats.friendly_interaction += 1
                 cat1.stats.interacted_with.add(c2)
@@ -334,6 +357,8 @@ class Simulation:
                 cat2.stats.interacted_with.add(c1)
                 rel.value -= 0.05
                 rel.value = max(-1, rel.value)
+                if rel.value < rel.stats.min_value:
+                    rel.stats.min_value = rel.value
 
     def calculate_metrics(self):
         G = nx.Graph()
@@ -341,7 +366,11 @@ class Simulation:
         G.add_nodes_from(range(70))
         for rel in self.relationships.values():
             rel.metrics = RelationshipMetrics(
-                1 - (rel.stats.absolute_delta / self.params.iterations)
+                stability=1 / (1 + rel.stats.absolute_delta),
+                volatility=rel.stats.absolute_delta / self.params.iterations,
+                min_value=rel.stats.min_value,
+                max_value=rel.stats.max_value,
+                number_of_sign_flips=rel.stats.number_of_sign_flips,
             )
             if rel.value < 0:
                 G.add_edge(rel.traits.cat1, rel.traits.cat2)
@@ -349,6 +378,18 @@ class Simulation:
         cliques = [clique for clique in list(nx.find_cliques(G)) if len(clique) > 2]
 
         for cat in self.cats:
+            total_connections = len(cat.stats.interacted_with)
+            prob_friends = (
+                0
+                if total_connections == 0
+                else len(self.get_friends(cat.traits.id)) / total_connections
+            )
+            prob_enemies = (
+                0
+                if total_connections == 0
+                else len(self.get_enemies(cat.traits.id)) / total_connections
+            )
+            prob_aqua = 0 if total_connections == 0 else 1 - prob_friends - prob_enemies
             config = {
                 "percent_time_spent_home": cat.stats.iter_at_home
                 / self.params.iterations,
@@ -370,15 +411,30 @@ class Simulation:
                 / cat.stats.times_at_neutral
                 if cat.stats.times_at_neutral > 0
                 else 0,
-                "amount_of_cats_interacted_with": len(cat.stats.interacted_with),
-                "amount_of_friends": len(self.get_friends(cat.traits.id)),
-                "amount_of_enemies": len(self.get_enemies(cat.traits.id)),
+                "percent_of_cats_interacted_with": total_connections
+                / (self.params.cat_amount - 1),
+                "percent_of_friends": 0
+                if total_connections == 0
+                else prob_friends / total_connections,
+                "percent_of_enemies": 0
+                if total_connections == 0
+                else prob_enemies / total_connections,
+                "percent_of_aquaintances": 0
+                if total_connections == 0
+                else prob_aqua / total_connections,
                 "percent_time_spent_fighting": cat.stats.fights
                 / self.params.iterations,
                 "percent_time_spent_friendly_interaction": cat.stats.friendly_interaction
                 / self.params.iterations,
                 "percent_time_spent_sleeping": cat.stats.sleeps
                 / self.params.iterations,
+                "exploration_index": len(cat.stats.nodes_visited)
+                / self.params.node_amount,
+                "relationship_entropy": -(
+                    prob_friends * safe_log(prob_friends)
+                    + prob_enemies * safe_log(prob_enemies)
+                    + prob_aqua * safe_log(prob_aqua)
+                ),
             }
 
             cats_cliques = [clique for clique in cliques if cat.traits.id in clique]
@@ -393,12 +449,44 @@ class Simulation:
             )
             cat.metrics = CatMetrics(**config)
 
+        max_interactions_per_iteration = self.params.cat_amount // 2  # floor division
+        max_total_interactions = self.params.iterations * max_interactions_per_iteration
+
+        interaction_density = (
+            self.stats.total_number_interactions / max_total_interactions
+        )
+
         average_size_friendgroups = (
             0
             if len(cliques) == 0
             else sum([len(clique) for clique in cliques]) / len(cliques)
         )
-        self.metrics = SimulationMetrics(len(cliques), average_size_friendgroups)
+
+        largest_group_size = (
+            0 if len(cliques) <= 0 else max(len(clique) for clique in cliques)
+        )
+
+        isolated_cats = [
+            cat for cat in self.cats if cat.metrics.percent_of_friends == 0
+        ]
+
+        relationship_values = [
+            rel.value for rel in self.relationships.values() if rel.stats.interacted
+        ]
+        mean_relationship_value = (
+            0
+            if len(relationship_values) == 0
+            else sum(relationship_values) / len(relationship_values)
+        )
+
+        self.metrics = SimulationMetrics(
+            friendgroups_total=len(cliques),
+            average_size_friendgroups=average_size_friendgroups,
+            largest_group_size=largest_group_size,
+            interaction_density=interaction_density,
+            isolated_cats_count=len(isolated_cats),
+            mean_relationship_value=mean_relationship_value,
+        )
 
     def run(self):
         for i in range(self.params.iterations):
