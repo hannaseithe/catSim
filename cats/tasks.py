@@ -1,4 +1,3 @@
-from django.utils import timezone
 from celery import shared_task
 
 from cats.models import SimulationResults, SimulationRun
@@ -12,11 +11,14 @@ logger = logging.getLogger(__name__)
 
 @shared_task(bind=True)
 def run_simulation(self, run_id):
+    return run_simulation_logic(run_id)
+
+
+def run_simulation_logic(run_id):
     run = SimulationRun.objects.get(id=run_id)
     run.mark_running()
 
     logger.info(f"Simulation {run.id} started")
-    logger.info(run.params)
 
     try:
         params = SimulationParameters(**run.params)
