@@ -158,7 +158,7 @@ class Simulation:
         edge_sigma = self.params.var_edges**0.5
         for i in range(self.params.node_amount):
             number_of_edges = max(
-                1, round(random.gauss(self.params.mean_edges, edge_sigma))
+                1, round(min(random.gauss(self.params.mean_edges, edge_sigma),self.params.node_amount))
             )
             self.nodes.append(Node(id=i, number_of_edges=number_of_edges))
 
