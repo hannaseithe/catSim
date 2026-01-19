@@ -90,11 +90,11 @@ class SimulationCreateSerializer(serializers.Serializer):
 class SimulationStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = SimulationRun
-        fields = ["id", "status", "created_at", "started_at", "finished_at", "params"]
+        fields = ["id", "status", "created_at", "started_at", "finished_at", "params", "user"]
 
 
 class SimulationErrorSerializer(serializers.ModelSerializer):
-    error = serializers.CharField(source="error_messages", read_only=True)
+    error = serializers.CharField(source="error_message", read_only=True)
 
     class Meta:
         model = SimulationRun

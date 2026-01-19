@@ -23,4 +23,4 @@ def test_simulation_run_logic_fail():
     run_simulation_logic(run.id)
     run.refresh_from_db()
     assert run.status == SimulationRun.Status.FAILED
-    assert run.error_messages == "iterations must be greater than 0"
+    assert run.error_message == "iterations must be greater than 0"

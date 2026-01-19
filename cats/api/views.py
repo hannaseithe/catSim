@@ -4,8 +4,10 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.permissions import IsAuthenticated
 
+from cats.api.permissions import IsOwnerOrAdmin
 from cats.api.serializers import (
     SimulationCreateSerializer,
     SimulationErrorSerializer,
@@ -22,6 +24,8 @@ NOT_COMPLETED_RESPONSE = {"detail": "Simulation has not completed"}
 
 
 class SimulationStartView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
     def post(self, request):
         serializer = SimulationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -40,14 +44,22 @@ class SimulationStartView(APIView):
         )
 
 
-class SimulationDetailView(APIView):
-    def get(self, request, id):
-        run = get_object_or_404(SimulationRun, id=id)
-        serializer = SimulationStatusSerializer(run)
-        return Response(serializer.data)
+class SimulationDetailView(RetrieveAPIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationStatusSerializer
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return SimulationRun.objects.all()
+        return SimulationRun.objects.filter(user=user)
+    
 
 
 class SimulationErrorView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
     def get(self, request, id):
         run = get_object_or_404(SimulationRun, id=id)
         if run.status != SimulationRun.Status.FAILED:
@@ -60,6 +72,8 @@ class SimulationErrorView(APIView):
 
 
 class SimulationResultView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
     def get(self, request, id):
         run = get_object_or_404(SimulationRun, id=id)
         if run.status != SimulationRun.Status.FINISHED:
@@ -73,5 +87,11 @@ class SimulationResultView(APIView):
 
 
 class SimulationListView(ListAPIView):
-    queryset = SimulationRun.objects.all()
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationStatusSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return SimulationRun.objects.all()
+        return SimulationRun.objects.filter(user=user)

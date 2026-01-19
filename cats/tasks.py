@@ -37,4 +37,4 @@ def run_simulation_logic(run_id):
 
     except Exception as e:
         run.mark_failed(str(e))
-        logger.info(f"Simulation {run.id} failed. Error: {run.error_messages}")
+        logger.info(f"Simulation {run.id} failed. Error: {run.error_message}")

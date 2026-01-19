@@ -37,7 +37,7 @@ def test_model_simulation_run_fail_lifecycle(create_simulation):
     sim.mark_failed("This simulation has failed")
     assert sim.finished_at is not None
     assert sim.status == SimulationRun.Status.FAILED
-    assert sim.error_messages == "This simulation has failed"
+    assert sim.error_message == "This simulation has failed"
 
 
 @pytest.mark.django_db

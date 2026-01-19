@@ -1,12 +1,19 @@
 from django.db import models
 from django.utils import timezone
 
+from django_project import settings
+
 
 class InvalidSimulationState(Exception):
     """Raised when a simulation run is transitioned into an invalid state."""
 
 
 class SimulationRun(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="simulations",
+    )
     params = models.JSONField()
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -23,7 +30,7 @@ class SimulationRun(models.Model):
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
 
-    error_messages = models.TextField(null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
 
     def mark_running(self):
         if self.status != self.Status.PENDING:
@@ -50,8 +57,8 @@ class SimulationRun(models.Model):
             )
         self.status = self.Status.FAILED
         self.finished_at = timezone.now()
-        self.error_messages = error_message
-        self.save(update_fields=["status", "finished_at", "error_messages"])
+        self.error_message = error_message
+        self.save(update_fields=["status", "finished_at", "error_message"])
 
 
 class SimulationResults(models.Model):
