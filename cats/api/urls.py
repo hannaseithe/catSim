@@ -22,7 +22,7 @@ urlpatterns = [
         name="simulation-get-error",
     ),
     path(
-        "api/simulations/<int:id>",
+        "api/simulations/<int:pk>/",
         SimulationDetailView.as_view(),
         name="simulation-get-detail",
     ),

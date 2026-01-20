@@ -33,7 +33,7 @@ class SimulationStartView(APIView):
         params = serializer.validated_data
         params["seed"] = secrets.randbits(32)
 
-        run = SimulationRun.objects.create(params=params)
+        run = SimulationRun.objects.create(user = request.user, params=params)
         run_simulation.delay(run.id)
         logger.info(
             f"Queued simulation {run.id} with seed {params['seed']} and parameters: {params}"
