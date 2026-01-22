@@ -48,7 +48,7 @@ class SimulationRun(models.Model):
             )
         self.status = self.Status.FINISHED
         self.finished_at = timezone.now()
-        self.save(update_fields=["status", "started_at"])
+        self.save(update_fields=["status", "finished_at"])
 
     def mark_failed(self, error_message):
         if self.status != self.Status.RUNNING:
