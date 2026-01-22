@@ -19,11 +19,13 @@ numpy==2.4.1
 packaging==25.0
 pluggy==1.6.0
 prompt_toolkit==3.0.52
+psycopg2-binary==2.9.11
 Pygments==2.19.2
 PyJWT==2.10.1
 pytest==9.0.2
 pytest-django==4.11.1
 python-dateutil==2.9.0.post0
+python-decouple==3.8
 redis==7.1.0
 six==1.17.0
 sqlparse==0.5.5
