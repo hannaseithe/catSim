@@ -39,7 +39,7 @@ class SimulationRun(models.Model):
             )
         self.status = self.Status.RUNNING
         self.started_at = timezone.now()
-        self.save(update_fields=["status", "finished_at"])
+        self.save(update_fields=["status", "started_at"])
 
     def mark_completed(self):
         if self.status != self.Status.RUNNING:
