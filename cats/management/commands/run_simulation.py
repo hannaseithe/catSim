@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 import secrets
 
+from accounts.models import CustomUser
 from cats.models import SimulationRun
 
 import logging
@@ -14,6 +15,7 @@ class Command(BaseCommand):
     help = "Queue a simulation run"
 
     def add_arguments(self, parser):
+        parser.add_argument("-u", "--user_id", type=int, required=True, help="Id of user the Simulation should be attached to")
         parser.add_argument(
             "-i", "--iterations", type=int, default=1000, help="Number of iterations"
         )
@@ -35,7 +37,7 @@ class Command(BaseCommand):
             "--var_edges",
             type=int,
             default=1.0,
-            help="The variance of conenctions between nodes",
+            help="The variance of connections between nodes",
         )
         parser.add_argument(
             "-ma",
@@ -83,7 +85,8 @@ class Command(BaseCommand):
         params = {key: options[key] for key in param_keys}
         params["seed"] = seed
 
-        run = SimulationRun.objects.create(params=params)
+        user = CustomUser.objects.get(id=options["user_id"])
+        run = SimulationRun.objects.create(params=params, user=user)
         run_simulation.delay(run.id)
         logger.info(
             f"Queued simulation {run.id} with seed {seed} and parameters: {params}"
