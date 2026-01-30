@@ -1,6 +1,6 @@
 import pytest
 
-from cats.models import InvalidSimulationState, SimulationResults, SimulationRun
+from cats.models import InvalidSimulationState, SimulationRun
 from cats.tests.conftest import DUMMY_METRICS
 
 

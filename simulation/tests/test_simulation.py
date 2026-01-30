@@ -19,7 +19,7 @@ def test_simulation_instantiation(sample_sim):
     assert sample_sim.nodes == []
     assert sample_sim.edges == []
     assert sample_sim.relationships == {}
-    assert sample_sim.metrics == None
+    assert sample_sim.metrics is None
 
 
 def test_simulation_method_generate_initial_state(sample_sim):
@@ -44,8 +44,8 @@ def test_simulation_method_movement_step(sample_sim):
     sample_sim.movement_step()
 
     assert sample_sim.cats[0].current_node == 4
-    assert sample_sim.cats[1].current_node == None
-    assert sample_sim.cats[2].current_node == None
+    assert sample_sim.cats[1].current_node is None
+    assert sample_sim.cats[2].current_node is None
 
     assert sample_sim.cats[0].stats.iter_at_home == 1
     assert sample_sim.cats[1].stats.iter_at_home == 1
@@ -59,8 +59,8 @@ def test_simulation_method_movement_step(sample_sim):
     sample_sim.movement_step()
 
     assert sample_sim.cats[0].current_node == 4
-    assert sample_sim.cats[1].current_node == None
-    assert sample_sim.cats[2].current_node == None
+    assert sample_sim.cats[1].current_node is None
+    assert sample_sim.cats[2].current_node is None
 
     assert sample_sim.cats[0].stats.iter_at_home == 3
     assert sample_sim.cats[1].stats.iter_at_home == 1
