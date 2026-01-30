@@ -2,7 +2,7 @@
 
 I simulate the relationships of cats developing over time. Currently this serves mainly the purpose of practicing headless Django with a fun little simulation behind it
 
-### v1.0.0:
+### [v1.0.0](https://github.com/hannaseithe/catSim/releases/tag/v1.0.0)
 - `/simulation` contains the actual simulation, decoupled from django
 - `/cats` is the django app, that contains:
   - Basic models for Simulation Run and Results persistence
@@ -11,7 +11,7 @@ I simulate the relationships of cats developing over time. Currently this serves
 
 - Redis required as Celery broker
 
-### v2.0.0:
+### [v2.0.0](https://github.com/hannaseithe/catSim/releases/tag/v2.0.0):
 - the simulation is now accessible through an API, with JWT based authentication:
   - `/api/simulations/`:`GET` -> Get List of Simulations is returned (for normal users only Simulations that they created, and for admin all simulations)
   - `/api/simulations/start/`:`POST` -> Start a simulation (queued with Celery)
