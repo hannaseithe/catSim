@@ -1,6 +1,8 @@
 .venv/
 .env
 .env_forproduction
+.coverage
+/htmlcov
 
 __pycache__/
 *.pyc

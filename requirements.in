@@ -1,0 +1,13 @@
+# for production:
+# - add new package here (if only needed in development -> add to requirements-dev.in)
+# `pip-compile requirements.in`
+# `pip install -r requirements.txt
+Django==6.0
+djangorestframework==3.16.1
+djangorestframework_simplejwt==5.5.1
+psycopg2-binary==2.9.11
+gunicorn==23.0.0
+celery==5.6.2
+redis==7.1.0
+networkx==3.6.1
+python-decouple==3.8
