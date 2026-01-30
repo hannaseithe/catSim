@@ -1,3 +1,4 @@
+from typing import ClassVar, Self
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -25,9 +26,9 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class CustomUser(AbstractUser):
-    username = None 
+    username = None # type: ignore[assignment]
     email = models.EmailField(unique=True) 
-    objects = CustomUserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS: ClassVar[list[str]] = []
+    objects: ClassVar[CustomUserManager[Self]] = CustomUserManager() # type: ignore[assignment]
