@@ -39,12 +39,27 @@ def api_client():
     return APIClient()
 
 @pytest.fixture
-def login(db):
-    def _login(api_client:APIClient, user:CustomUser, password):
+def auth_client_with_refresh(db, api_client):
+    def _login(user:CustomUser, password):
         url = reverse('token_obtain_pair')
         response = api_client.post(url,{"email": user.email, "password":password}, format="json")
         access_token = response.data["access"]
         refresh_token = response.data["refresh"]
-        return (access_token,refresh_token)
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+        return api_client,refresh_token
     return _login
+
+@pytest.fixture
+def valid_create_sim_args():
+    return {
+        "iterations": 100,
+        "cat_amount": 10,
+        "node_amount": 60,
+        "mean_edges": 4,
+        "var_edges": 1.0,
+        "mean_aggressive": 0.0,
+        "var_aggressive": 0.1,
+        "mean_laziness": 0.5,
+        "var_laziness": 0.05,
+    }
 

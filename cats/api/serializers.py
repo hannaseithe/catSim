@@ -81,7 +81,7 @@ class SimulationCreateSerializer(serializers.Serializer):
 
         if data["var_edges"] * 3 >= data["mean_edges"]:
             raise serializers.ValidationError(
-                "The variance of edges can be more than a third of the mean"
+                "The variance of edges cant be more than a third of the mean"
             )
 
         return data
