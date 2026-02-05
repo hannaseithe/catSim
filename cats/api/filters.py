@@ -4,6 +4,7 @@ from cats.models import SimulationRun
 
 class SimulationFilter(filters.FilterSet):
     status = filters.CharFilter(field_name="status")
+    user = filters.CharFilter(field_name="user")
     created_after = filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="gte")
     created_before = filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="lte")
 
@@ -11,6 +12,7 @@ class SimulationFilter(filters.FilterSet):
         model = SimulationRun
         fields = [
             'status',
+            'user',
             'created_after',
             'created_before',
         ]

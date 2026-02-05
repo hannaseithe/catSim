@@ -71,3 +71,44 @@ def test_filter_by_created_after(auth_client_with_refresh, create_user, create_s
     assert response2.status_code == 200, "response status code not 200"
     sims = response2.data
     assert len(sims) == 0, "Length of response list is not 0"
+
+def test_filter_by_user(auth_client_with_refresh, create_user, create_superuser, create_simulation_list):
+
+    user1 = create_user(email="test1@email.com",password="test1password")
+    user2 = create_user(email="test2@email.com",password="test2password")
+    superuser = create_superuser()
+
+    sim_list1 = create_simulation_list(user = user1)
+    sim_list2 = create_simulation_list(user = user2)
+
+
+    auth_client1, _ = auth_client_with_refresh(user=user1, password="test1password")
+    auth_client2, _ = auth_client_with_refresh(user=superuser, password="supertestpassword")
+
+    url = reverse("simulation-list")
+    response1 = auth_client1.get(url, {"user": user1.id})
+    response2 = auth_client2.get(url, {"user": user1.id})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data
+    assert len(sims) == 5, "Length of response list is not 5"
+    assert sims[0] == SimulationStatusSerializer(sim_list1[0]).data, "First Simulation of List response is different from first simulation of list in memory"
+
+    assert response2.status_code == 200, "response status code not 200"
+    sims = response2.data
+    assert len(sims) == 5, "Length of response list is not 5"
+    assert sims[0] == SimulationStatusSerializer(sim_list1[0]).data, "First Simulation of List response is different from first simulation of list in memory"
+
+    print(user2.id)
+    print(superuser.id)
+    response3 = auth_client1.get(url, {"user": user2.id})
+    response4 = auth_client2.get(url, {"user": user2.id})
+
+    assert response3.status_code == 200, "response status code not 200"
+    sims = response3.data
+    assert len(sims) == 0, "Length of response list is not 0"
+
+    assert response4.status_code == 200, "response status code not 200"
+    sims = response4.data
+    assert len(sims) == 5, "Length of response list is not 5"
+    assert sims[0] == SimulationStatusSerializer(sim_list2[0]).data, "First Simulation of List response is different from first simulation of list in memory"

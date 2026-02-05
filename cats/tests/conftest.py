@@ -13,6 +13,12 @@ def create_user(db):
     return _create_user
 
 @pytest.fixture
+def create_superuser(db):
+    def _create_superuser(email="supertest@email.com", password="supertestpassword"):
+        return CustomUser.objects.create_superuser(email=email,password=password)
+    return _create_superuser 
+
+@pytest.fixture
 def create_simulation(db, create_user):
     def _create_simulation(user=None, params=None):
         if not user:
@@ -47,8 +53,9 @@ def api_client():
     return APIClient()
 
 @pytest.fixture
-def auth_client_with_refresh(db, api_client):
+def auth_client_with_refresh(db):
     def _login(user:CustomUser, password):
+        api_client = APIClient()
         url = reverse('token_obtain_pair')
         response = api_client.post(url,{"email": user.email, "password":password}, format="json")
         access_token = response.data["access"]
