@@ -27,8 +27,11 @@ click-repl==0.3.0
 django==6.0
     # via
     #   -r requirements.in
+    #   django-filter
     #   djangorestframework
     #   djangorestframework-simplejwt
+django-filter==25.2
+    # via -r requirements.in
 djangorestframework==3.16.1
     # via
     #   -r requirements.in
