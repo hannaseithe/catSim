@@ -23,6 +23,14 @@ def create_simulation(db, create_user):
     return _create_simulation
 
 @pytest.fixture
+def create_simulation_list(db,create_user, create_simulation):
+    def _create_simulation_list(user=None, number_of_lists=5):
+        if not user:
+            user = create_user()
+        return [create_simulation(user=user, params={"iterations":10*i}) for i in range(1,number_of_lists +1)]
+    return _create_simulation_list
+
+@pytest.fixture
 def create_results(db, create_simulation, create_user):
     def _create_results(user=None, run=None, metrics=None):
         if metrics is None:

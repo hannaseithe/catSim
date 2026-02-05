@@ -1,12 +1,14 @@
 import logging
 import secrets
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 
+from cats.api.filters import SimulationFilter
 from cats.api.permissions import IsOwnerOrAdmin
 from cats.api.serializers import (
     SimulationCreateSerializer,
@@ -89,6 +91,9 @@ class SimulationResultView(APIView):
 class SimulationListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationStatusSerializer
+
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = SimulationFilter
 
     def get_queryset(self):
         user = self.request.user

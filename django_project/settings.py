@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "cats.apps.CatsConfig",
     "accounts.apps.AccountsConfig",
     "rest_framework",
+    "django_filters",
 ]
 
 MIDDLEWARE = [
