@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 NOT_FAILED_RESPONSE = {"detail": "Simulation has not failed"}
 NOT_COMPLETED_RESPONSE = {"detail": "Simulation has not completed"}
 
-
 class SimulationStartView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
@@ -100,3 +99,8 @@ class SimulationListView(ListAPIView):
         if user.is_staff:
             return SimulationRun.objects.all()
         return SimulationRun.objects.filter(user=user)
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)

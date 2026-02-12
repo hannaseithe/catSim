@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 
 from cats.models import SimulationResults, SimulationRun
@@ -88,9 +89,23 @@ class SimulationCreateSerializer(serializers.Serializer):
 
 
 class SimulationStatusSerializer(serializers.ModelSerializer):
+    params = serializers.SerializerMethodField()
     class Meta:
         model = SimulationRun
         fields = ["id", "status", "created_at", "started_at", "finished_at", "params", "user"]
+    
+    def get_params(self, obj):
+        # Recursively convert any Decimal in JSON to float
+        def convert(value):
+            if isinstance(value, dict):
+                return {k: convert(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [convert(v) for v in value]
+            elif isinstance(value, Decimal):
+                return float(value)
+            return value
+
+        return convert(obj.params)
 
 
 class SimulationErrorSerializer(serializers.ModelSerializer):
