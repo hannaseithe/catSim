@@ -1,4 +1,6 @@
+from datetime import datetime, date, time
 from django.urls import reverse
+from django.utils.timezone import make_aware
 import pytest
 from accounts.models import CustomUser
 from cats.models import SimulationResults, SimulationRun
@@ -20,12 +22,16 @@ def create_superuser(db):
 
 @pytest.fixture
 def create_simulation(db, create_user):
-    def _create_simulation(user=None, params=None):
+    def _create_simulation(created_at=None,user=None, params=None):
+        if not created_at:
+            created_at = datetime.now()
+        elif isinstance(created_at,date):
+            created_at = make_aware(datetime.combine(created_at, time.min))
         if not user:
             user = create_user()
         if params is None:
             params = {"iterations": 10}
-        return SimulationRun.objects.create(params = params, user=user)
+        return SimulationRun.objects.create(params = params, user=user, created_at=created_at)
     return _create_simulation
 
 @pytest.fixture

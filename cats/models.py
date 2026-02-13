@@ -16,7 +16,7 @@ class SimulationRun(models.Model):
     )
     params = models.JSONField()
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
     started_at = models.DateTimeField(null=True)
     finished_at = models.DateTimeField(null=True)
 

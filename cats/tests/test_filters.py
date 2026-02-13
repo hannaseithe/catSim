@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.urls import reverse
 
 from cats.api.serializers import SimulationStatusSerializer
@@ -46,6 +46,35 @@ def test_filter_by_created_at_max(auth_client_with_refresh, create_user, create_
     assert response2.status_code == 200, "response status code not 200"
     sims = response2.data.get("results")
     assert len(sims) == 0, "Length of response list is not 0"
+
+def test_filter_by_created_at_with_date(auth_client_with_refresh, create_user, create_simulation):
+
+    user = create_user(email="test1@email.com",password="test1password")
+    
+    today = datetime.today()
+    past_date = today + timedelta(days=-1)
+    future_date = today + timedelta(days=1)
+    sim1 = create_simulation(user = user, created_at=past_date)
+    sim2 = create_simulation(user=user, created_at=today)
+    sim3 =  create_simulation(user=user, created_at=future_date)
+
+    auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
+
+    url = reverse("simulation-list")
+    response1 = auth_client.get(url, {"created_at_min": today.isoformat()})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data.get("results")
+    assert len(sims) == 1, "Length of response list is not 1"
+    assert sims[0].get("id") == SimulationStatusSerializer(sim3).data.get("id"), "First returned Simulation is different from third created simulation"
+
+    response2 = auth_client.get(url, {"created_at_max": today.isoformat()})
+    
+    assert response2.status_code == 200, "response status code not 200"
+    sims = response2.data.get("results")
+    assert len(sims) == 2, "Length of response list is not 2"
+    assert sims[0].get("id") == SimulationStatusSerializer(sim2).data.get("id"), "First returned Simulation is different from second created simulation"
+    assert sims[1].get("id") == SimulationStatusSerializer(sim1).data.get("id"), "Second returned Simulation is different from first created simulation"
 
 def test_filter_by_created_at_min(auth_client_with_refresh, create_user, create_simulation_list):
     before_creation = datetime.now()
