@@ -22,7 +22,7 @@ def test_filter_by_status(auth_client_with_refresh, create_user, create_simulati
     sims = response2.data
     assert len(sims) == 0, "Length of response list is not 0"
 
-def test_filter_by_created_before(auth_client_with_refresh, create_user, create_simulation_list):
+def test_filter_by_created_at_max(auth_client_with_refresh, create_user, create_simulation_list):
     before_creation = datetime.now()
     before_creation_iso = before_creation.isoformat()
 
@@ -35,19 +35,19 @@ def test_filter_by_created_before(auth_client_with_refresh, create_user, create_
     auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
 
     url = reverse("simulation-list")
-    response1 = auth_client.get(url, {"created_before": after_creation_iso})
+    response1 = auth_client.get(url, {"created_at_max": after_creation_iso})
     
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data
     assert len(sims) == 5, "Length of response list is not 5"
     assert sims[0] == SimulationStatusSerializer(sim_list[0]).data, "First Simulation of List response is different from first simulation of list in memory"
 
-    response2 = auth_client.get(url, {"created_before": before_creation_iso})
+    response2 = auth_client.get(url, {"created_at_max": before_creation_iso})
     assert response2.status_code == 200, "response status code not 200"
     sims = response2.data
     assert len(sims) == 0, "Length of response list is not 0"
 
-def test_filter_by_created_after(auth_client_with_refresh, create_user, create_simulation_list):
+def test_filter_by_created_at_min(auth_client_with_refresh, create_user, create_simulation_list):
     before_creation = datetime.now()
     before_creation_iso = before_creation.isoformat()
 
@@ -60,14 +60,14 @@ def test_filter_by_created_after(auth_client_with_refresh, create_user, create_s
     auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
 
     url = reverse("simulation-list")
-    response1 = auth_client.get(url, {"created_after": before_creation_iso})
+    response1 = auth_client.get(url, {"created_at_min": before_creation_iso})
     
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data
     assert len(sims) == 5, "Length of response list is not 5"
     assert sims[0] == SimulationStatusSerializer(sim_list[0]).data, "First Simulation of List response is different from first simulation of list in memory"
 
-    response2 = auth_client.get(url, {"created_after": after_creation_iso})
+    response2 = auth_client.get(url, {"created_at_min": after_creation_iso})
     assert response2.status_code == 200, "response status code not 200"
     sims = response2.data
     assert len(sims) == 0, "Length of response list is not 0"
@@ -126,6 +126,32 @@ def test_filter_by_iterations(auth_client_with_refresh, create_user, create_simu
     assert len(sims) == 1, "Length of response list is not 1"
     assert sims[0] == SimulationStatusSerializer(sim_list[0]).data, "First Simulation of List response is different from first simulation of list in memory"
 
+def test_filter_by_iterations_max(auth_client_with_refresh, create_user, create_simulation_list):
+    user = create_user(email="test1@email.com",password="test1password")
+    sim_list = create_simulation_list(user = user)
+
+    auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
+    url = reverse("simulation-list")
+    response1 = auth_client.get(url, {"iterations_max": 20})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data
+    assert len(sims) == 2, "Length of response list is not 2"
+    assert sims[0] == SimulationStatusSerializer(sim_list[0]).data, "First Simulation of List response is different from first simulation of list in memory"
+
+def test_filter_by_iterations_min(auth_client_with_refresh, create_user, create_simulation_list):
+    user = create_user(email="test1@email.com",password="test1password")
+    sim_list = create_simulation_list(user = user)
+
+    auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
+    url = reverse("simulation-list")
+    response1 = auth_client.get(url, {"iterations_min": 20})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data
+    assert len(sims) == 4, "Length of response list is not 4"
+    assert sims[0] == SimulationStatusSerializer(sim_list[1]).data, "First Simulation of List response is different from first simulation of list in memory"
+
 def test_filter_by_cat_amounts(auth_client_with_refresh, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
     sim_list = create_simulation_list(user = user)
@@ -139,6 +165,32 @@ def test_filter_by_cat_amounts(auth_client_with_refresh, create_user, create_sim
     assert len(sims) == 1, "Length of response list is not 1"
     assert sims[0] == SimulationStatusSerializer(sim_list[1]).data, "First Simulation of List response is different from first simulation of list in memory"
 
+def test_filter_by_cat_amounts_max(auth_client_with_refresh, create_user, create_simulation_list):
+    user = create_user(email="test1@email.com",password="test1password")
+    sim_list = create_simulation_list(user = user)
+
+    auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
+    url = reverse("simulation-list")
+    response1 = auth_client.get(url, {"cat_amount_max": 6})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data
+    assert len(sims) == 2, "Length of response list is not 2"
+    assert sims[0] == SimulationStatusSerializer(sim_list[0]).data, "First Simulation of List response is different from first simulation of list in memory"
+
+def test_filter_by_cat_amounts_min(auth_client_with_refresh, create_user, create_simulation_list):
+    user = create_user(email="test1@email.com",password="test1password")
+    sim_list = create_simulation_list(user = user)
+
+    auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
+    url = reverse("simulation-list")
+    response1 = auth_client.get(url, {"cat_amount_min": 6})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data
+    assert len(sims) == 4, "Length of response list is not 4"
+    assert sims[0] == SimulationStatusSerializer(sim_list[1]).data, "First Simulation of List response is different from first simulation of list in memory"
+
 def test_filter_by_node_amounts(auth_client_with_refresh, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
     sim_list = create_simulation_list(user = user)
@@ -150,4 +202,30 @@ def test_filter_by_node_amounts(auth_client_with_refresh, create_user, create_si
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data
     assert len(sims) == 1, "Length of response list is not 1"
+    assert sims[0] == SimulationStatusSerializer(sim_list[1]).data, "First Simulation of List response is different from first simulation of list in memory"
+
+def test_filter_by_node_amounts_max(auth_client_with_refresh, create_user, create_simulation_list):
+    user = create_user(email="test1@email.com",password="test1password")
+    sim_list = create_simulation_list(user = user)
+
+    auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
+    url = reverse("simulation-list")
+    response1 = auth_client.get(url, {"node_amount_max": 10})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data
+    assert len(sims) == 2, "Length of response list is not 2"
+    assert sims[0] == SimulationStatusSerializer(sim_list[0]).data, "First Simulation of List response is different from first simulation of list in memory"
+
+def test_filter_by_node_amounts_min(auth_client_with_refresh, create_user, create_simulation_list):
+    user = create_user(email="test1@email.com",password="test1password")
+    sim_list = create_simulation_list(user = user)
+
+    auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
+    url = reverse("simulation-list")
+    response1 = auth_client.get(url, {"node_amount_min": 10})
+    
+    assert response1.status_code == 200, "response status code not 200"
+    sims = response1.data
+    assert len(sims) == 4, "Length of response list is not 4"
     assert sims[0] == SimulationStatusSerializer(sim_list[1]).data, "First Simulation of List response is different from first simulation of list in memory"
