@@ -22,3 +22,34 @@ I simulate the relationships of cats developing over time. Currently this serves
 - for authentication:
   -  `/api/token/`:`POST`-> Get Access Token / Login
   -  `/api/token/refresh`:`POST` -> Refresh Token
+
+ #### [v2.1.0](https://github.com/hannaseithe/catSim/releases/tag/v2.0.0):
+Added filtering, ordering and pagination to  `/api/simulations/`:`GET` endpoint
+
+Filters:
+e.g. `/api/simulations/?status=finished&user=2`
+- `status` match: `exact`
+- `user` match: `exact`
+- `created_at_min` match `>=` (accepts DateTime Iso Format)
+- `created_at_max`  match `<=` (accepts DateTime Iso Format)
+- `iterations` match: `exact`
+- `iterations_min` match `>=`
+- `iterations_max`  match `<=`
+- `cat_amount` match: `exact`
+- `cat_amount_min` match `>=`
+- `cat_amount_max`  match `<=`
+- `node_amount` match: `exact`
+- `node_amount_min` match `>=`
+- `node_amount_max`  match `<=`
+
+Order_Fields:
+e.g. `/api/simulations/?ordering=iterations`
+- `created_at`
+- `iterations`
+- `cat_amount`
+- `node_amount`
+
+Pagination:
+e.g. `/api/simulations/?page=2&page_size=20`
+- `page_size` defines the size of a page
+- `page` defines the page number 
