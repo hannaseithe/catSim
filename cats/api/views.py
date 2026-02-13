@@ -1,10 +1,13 @@
 import logging
 import secrets
+from django.db.models import F, IntegerField
+from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 
@@ -92,13 +95,24 @@ class SimulationListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationStatusSerializer
 
-    filter_backends = [DjangoFilterBackend]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SimulationFilter
+    ordering_fields = ['created_at', 'iterations', 'cat_amount', 'node_amount']
+    ordering = ['-created_at']
 
     pagination_class = SimulationPagination
 
     def get_queryset(self):
         user = self.request.user
+
         if user.is_staff:
-            return SimulationRun.objects.all()
-        return SimulationRun.objects.filter(user=user)
+            qs = SimulationRun.objects.all()
+        else:
+            qs = SimulationRun.objects.filter(user=user)
+        
+        qs = qs.annotate(
+            iterations=Cast(F("params__iterations"), IntegerField()),
+            cat_amount=Cast(F("params__cat_amount"), IntegerField()),
+            node_amount=Cast(F("params__node_amount"), IntegerField()),
+        )
+        return qs

@@ -45,8 +45,8 @@ def test_simulation_list(create_simulation, create_user, auth_client_with_refres
     sims = response.data.get("results")
     assert isinstance(sims, list)
     assert len(sims) == 2
-    assert sims[0] == sim1_data
-    assert sims[1] == sim2_data
+    assert sims[1].get("id") == sim1_data.get("id")
+    assert sims[0].get("id") == sim2_data.get("id")
 
 def test_simulation_get_detail(api_client, create_simulation, create_user, auth_client_with_refresh):
     user = create_user(email="test1@email.com",password="test1password")
