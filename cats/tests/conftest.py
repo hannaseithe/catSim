@@ -30,10 +30,10 @@ def create_simulation(db, create_user):
 
 @pytest.fixture
 def create_simulation_list(db,create_user, create_simulation):
-    def _create_simulation_list(user=None, number_of_lists=5):
+    def _create_simulation_list(user=None, number_of_sims=5):
         if not user:
             user = create_user()
-        return [create_simulation(user=user, params={"iterations":10*i, "cat_amount":3*i, "node_amount": 5*i}) for i in range(1,number_of_lists +1)]
+        return [create_simulation(user=user, params={"iterations":10*i, "cat_amount":3*i, "node_amount": 5*i}) for i in range(1,number_of_sims +1)]
     return _create_simulation_list
 
 @pytest.fixture

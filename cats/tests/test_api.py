@@ -42,7 +42,7 @@ def test_simulation_list(create_simulation, create_user, auth_client_with_refres
     sim2_data = SimulationStatusSerializer(sim2).data
 
     assert response.status_code == 200
-    sims = response.data
+    sims = response.data.get("results")
     assert isinstance(sims, list)
     assert len(sims) == 2
     assert sims[0] == sim1_data

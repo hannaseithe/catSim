@@ -9,6 +9,7 @@ from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 
 from cats.api.filters import SimulationFilter
+from cats.api.paginations import SimulationPagination
 from cats.api.permissions import IsOwnerOrAdmin
 from cats.api.serializers import (
     SimulationCreateSerializer,
@@ -94,13 +95,10 @@ class SimulationListView(ListAPIView):
     filter_backends = [DjangoFilterBackend]
     filterset_class = SimulationFilter
 
+    pagination_class = SimulationPagination
+
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
             return SimulationRun.objects.all()
         return SimulationRun.objects.filter(user=user)
-    
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
