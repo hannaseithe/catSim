@@ -9,26 +9,26 @@ from .views import (
 
 urlpatterns = [
     path(
-        "api/simulations/start/", SimulationStartView.as_view(), name="simulation-start"
+        "simulations/start/", SimulationStartView.as_view(), name="v1-simulation-start"
     ),
     path(
-        "api/simulations/<int:id>/results/",
+        "simulations/<int:id>/results/",
         SimulationResultView.as_view(),
-        name="simulation-get-results",
+        name="v1-simulation-get-results",
     ),
     path(
-        "api/simulations/<int:id>/error/",
+        "simulations/<int:id>/error/",
         SimulationErrorView.as_view(),
-        name="simulation-get-error",
+        name="v1-simulation-get-error",
     ),
     path(
-        "api/simulations/<int:pk>/",
+        "simulations/<int:pk>/",
         SimulationDetailView.as_view(),
-        name="simulation-get-detail",
+        name="v1-simulation-get-detail",
     ),
     path(
-        "api/simulations/",
+        "simulations/",
         SimulationListView.as_view(),
-        name="simulation-list",
+        name="v1-simulation-list",
     ),
 ]

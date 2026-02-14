@@ -11,10 +11,10 @@ from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 
-from cats.api.filters import SimulationFilter
+from cats.api.v1.filters import SimulationFilter
 from cats.api.paginations import SimulationPagination
 from cats.api.permissions import IsOwnerOrAdmin
-from cats.api.serializers import (
+from cats.api.unversioned.serializers import (
     SimulationCreateSerializer,
     SimulationErrorSerializer,
     SimulationResultSerializer,

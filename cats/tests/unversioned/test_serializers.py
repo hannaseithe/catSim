@@ -1,4 +1,4 @@
-from cats.api.serializers import SimulationCreateSerializer, SimulationErrorSerializer, SimulationResultSerializer, SimulationStatusSerializer
+from cats.api.unversioned.serializers import SimulationCreateSerializer, SimulationErrorSerializer, SimulationResultSerializer, SimulationStatusSerializer
 import pytest
 
 

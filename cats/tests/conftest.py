@@ -60,10 +60,22 @@ def api_client():
     return APIClient()
 
 @pytest.fixture
-def auth_client_with_refresh(db):
+def auth_client_with_refresh_unversioned(db):
     def _login(user:CustomUser, password):
         api_client = APIClient()
-        url = reverse('token_obtain_pair')
+        url = reverse('token-obtain-pair')
+        response = api_client.post(url,{"email": user.email, "password":password}, format="json")
+        access_token = response.data["access"]
+        refresh_token = response.data["refresh"]
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+        return api_client,refresh_token
+    return _login
+
+@pytest.fixture
+def auth_client_with_refresh_v1(db):
+    def _login(user:CustomUser, password):
+        api_client = APIClient()
+        url = reverse('v1-token-obtain-pair')
         response = api_client.post(url,{"email": user.email, "password":password}, format="json")
         access_token = response.data["access"]
         refresh_token = response.data["refresh"]
