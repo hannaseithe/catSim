@@ -5,69 +5,15 @@ from cats.models import SimulationResults, SimulationRun
 
 
 class SimulationCreateSerializer(serializers.Serializer):
-    iterations = serializers.IntegerField(default=1000)
-    cat_amount = serializers.IntegerField(default=10)
-    node_amount = serializers.IntegerField(default=60)
-    mean_edges = serializers.IntegerField(default=4)
-    var_edges = serializers.FloatField(default=1.0)
-    mean_aggressive = serializers.FloatField(default=0.0)
-    var_aggressive = serializers.FloatField(default=0.1)
-    mean_laziness = serializers.FloatField(default=0.5)
-    var_laziness = serializers.FloatField(default=0.05)
-
-    def validate_iterations(self, value):
-        if not 1 <= value <= 10000:
-            raise serializers.ValidationError("Must be between 1 and 10000")
-
-        return value
-
-    def validate_cat_amount(self, value):
-        if not 2 <= value <= 200:
-            raise serializers.ValidationError("Must be between 2 and 200")
-
-        return value
-
-    def validate_node_amount(self, value):
-        if not 3 <= value <= 1000:
-            raise serializers.ValidationError("Must be between 3 and 1000")
-
-        return value
-
-    def validate_mean_edges(self, value):
-        if not 2 <= value <= 20:
-            raise serializers.ValidationError("Must be between 2 and 20")
-
-        return value
-
-    def validate_var_edges(self, value):
-        if not 0 <= value <= 5:
-            raise serializers.ValidationError("Must be between 0 and 5")
-
-        return value
-
-    def validate_mean_aggressive(self, value):
-        if not -1 <= value <= 1:
-            raise serializers.ValidationError("Must be between -1 and 1")
-
-        return value
-
-    def validate_var_aggressive(self, value):
-        if not 0 <= value <= 0.5:
-            raise serializers.ValidationError("Must be between 0 and 0.5")
-
-        return value
-
-    def validate_mean_laziness(self, value):
-        if not 0 <= value <= 1:
-            raise serializers.ValidationError("Must be between 0 and 1")
-
-        return value
-
-    def validate_var_laziness(self, value):
-        if not 0 <= value <= 0.25:
-            raise serializers.ValidationError("Must be between 0 and 0.25")
-
-        return value
+    iterations = serializers.IntegerField(default=1000, min_value=1, max_value=10000)
+    cat_amount = serializers.IntegerField(default=10, min_value=2, max_value= 200)
+    node_amount = serializers.IntegerField(default=60, min_value=3, max_value=1000)
+    mean_edges = serializers.IntegerField(default=4, min_value=2, max_value=20)
+    var_edges = serializers.FloatField(default=1.0, min_value=0, max_value=5)
+    mean_aggressive = serializers.FloatField(default=0.0, min_value=-1, max_value=1)
+    var_aggressive = serializers.FloatField(default=0.1, min_value=0, max_value=0.5)
+    mean_laziness = serializers.FloatField(default=0.5, min_value=0, max_value=1)
+    var_laziness = serializers.FloatField(default=0.05, min_value=0, max_value=0.25)
 
     def validate(self, data):
         if data["cat_amount"] * 3 >= data["node_amount"]:

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from django.urls import reverse
+from django.utils import timezone
 
 from cats.api.serializers import SimulationStatusSerializer
 
@@ -23,13 +24,13 @@ def test_filter_by_status(auth_client_with_refresh, create_user, create_simulati
     assert len(sims) == 0, "Length of response list is not 0"
 
 def test_filter_by_created_at_max(auth_client_with_refresh, create_user, create_simulation_list):
-    before_creation = datetime.now()
+    before_creation = timezone.now()
     before_creation_iso = before_creation.isoformat()
 
     user = create_user(email="test1@email.com",password="test1password")
     sim_list = create_simulation_list(user = user)
 
-    after_creation = datetime.now()
+    after_creation = timezone.now()
     after_creation_iso = after_creation.isoformat()
 
     auth_client, _ = auth_client_with_refresh(user=user, password="test1password")
@@ -77,13 +78,13 @@ def test_filter_by_created_at_with_date(auth_client_with_refresh, create_user, c
     assert sims[1].get("id") == SimulationStatusSerializer(sim1).data.get("id"), "Second returned Simulation is different from first created simulation"
 
 def test_filter_by_created_at_min(auth_client_with_refresh, create_user, create_simulation_list):
-    before_creation = datetime.now()
+    before_creation = timezone.now()
     before_creation_iso = before_creation.isoformat()
 
     user = create_user(email="test1@email.com",password="test1password")
     sim_list = create_simulation_list(user = user)
 
-    after_creation = datetime.now()
+    after_creation = timezone.now()
     after_creation_iso = after_creation.isoformat()
 
     auth_client, _ = auth_client_with_refresh(user=user, password="test1password")

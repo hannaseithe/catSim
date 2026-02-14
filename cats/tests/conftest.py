@@ -1,4 +1,5 @@
 from datetime import datetime, date, time
+from django.utils import timezone
 from django.urls import reverse
 from django.utils.timezone import make_aware
 import pytest
@@ -24,7 +25,7 @@ def create_superuser(db):
 def create_simulation(db, create_user):
     def _create_simulation(created_at=None,user=None, params=None):
         if not created_at:
-            created_at = datetime.now()
+            created_at = timezone.now()
         elif isinstance(created_at,date):
             created_at = make_aware(datetime.combine(created_at, time.min))
         if not user:
