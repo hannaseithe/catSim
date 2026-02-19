@@ -214,6 +214,7 @@ def test_simulation_start_idempotency(mock_delay, create_user, auth_client_with_
 
     mock_delay.assert_called_once_with(data1["id"])
 
+@pytest.mark.django_db
 @patch("cats.models.AsyncResult")
 def test_simulation_cancel(mock_async_result, create_user, auth_client_with_refresh_v1):
 
@@ -250,6 +251,7 @@ def test_simulation_cancel(mock_async_result, create_user, auth_client_with_refr
     mock_async_result.assert_called_once_with("fake-task-id-123")
     mock_task_instance.revoke.assert_called_once_with(terminate=True)
 
+@pytest.mark.django_db
 @patch("cats.models.AsyncResult")
 def test_simulation_cancel_finished(mock_async_result, create_user, auth_client_with_refresh_v1):
 
@@ -281,6 +283,30 @@ def test_simulation_cancel_finished(mock_async_result, create_user, auth_client_
     assert run.status == SimulationRun.Status.FINISHED
 
     assert not mock_async_result.called
+
+@pytest.mark.django_db
+def test_simulation_delete(create_user, auth_client_with_refresh_v1):
+
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.FINISHED,
+        params=json.dumps({})
+    )
+
+    url = reverse("v1-simulation-delete-id", args=[run.id])
+    response = auth_client.delete(
+        url
+    )
+
+    assert response.status_code == 200
+    assert response.data["id"] == run.id
+    assert response.data["detail"] == "The SimulationRun has been deleted."
+
+    assert not SimulationRun.objects.filter(id=run.id).exists()
 
 
 

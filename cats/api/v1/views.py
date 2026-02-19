@@ -80,19 +80,8 @@ class SimulationCancelView(APIView):
             run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
         else:
             return Response({"detail": "No identifier provided."}, status=400)
-
-        if not run:
-            return Response(
-                {
-                    **{
-                        f"{'id' if simulation_id else 'uuid'}": simulation_id
-                        if simulation_id
-                        else simulation_uuid
-                    },
-                    "detail": f"No SimulationRun with {f'id: {simulation_id}' if simulation_id else f'uuid: {simulation_uuid}'} exists.",
-                },
-                status=404,
-            )
+        
+        self.check_object_permissions(request, run)
 
         identifiers = {"id": run.id, "uuid": run.uuid}
         if run.status not in (
@@ -110,6 +99,40 @@ class SimulationCancelView(APIView):
         run.cancel()
         return Response(
             {**identifiers, "detail": "The SimulationRun has been canceled."},
+            status=200,
+        )
+    
+class SimulationDeleteView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
+    def delete(self, request, simulation_id=None, simulation_uuid=None):
+        if simulation_id:
+            run = get_object_or_404(SimulationRun, id=simulation_id)
+        elif simulation_uuid:
+            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
+        else:
+            return Response({"detail": "No identifier provided."}, status=400)
+
+        
+        self.check_object_permissions(request, run)
+
+        identifiers = {"id": run.id, "uuid": run.uuid}
+        if run.status not in (
+            SimulationRun.Status.CANCELED,
+            SimulationRun.Status.FINISHED,
+            SimulationRun.Status.FAILED,
+        ):
+            print(f"The status of the simulation: {run.status}")
+            return Response(
+                {
+                    **identifiers,
+                    "detail": "The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first",
+                },
+                status=409,
+            )
+        run.delete()
+        return Response(
+            {**identifiers, "detail": "The SimulationRun has been deleted."},
             status=200,
         )
 
