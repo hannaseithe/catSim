@@ -1,5 +1,6 @@
 import logging
 import secrets
+from django.db import transaction
 from django.db.models import F, IntegerField
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
@@ -14,7 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from cats.api.v1.filters import SimulationFilter
 from cats.api.paginations import SimulationPagination
 from cats.api.permissions import IsOwnerOrAdmin
-from cats.api.unversioned.serializers import (
+from cats.api.v1.serializers import (
     SimulationCreateSerializer,
     SimulationErrorSerializer,
     SimulationResultSerializer,
@@ -35,17 +36,32 @@ class SimulationStartView(APIView):
         serializer = SimulationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        params = serializer.validated_data
+        print(serializer.validated_data)
+
+        uuid = serializer.validated_data["uuid"]
+
+        params = serializer.validated_data["params"]
         params["seed"] = secrets.randbits(32)
 
-        run = SimulationRun.objects.create(user = request.user, params=params)
-        run_simulation.delay(run.id)
-        logger.info(
-            f"Queued simulation {run.id} with seed {params['seed']} and parameters: {params}"
-        )
-
+        with transaction.atomic():
+            run, created = SimulationRun.objects.get_or_create(
+                uuid=uuid,
+                defaults={
+                    "user": request.user,
+                    "params": params
+                }
+            )
+            if created:
+                run_simulation.delay(run.id)
+                logger.info(
+                    f"Queued simulation {run.id} with seed {params['seed']} and parameters: {params}"
+                )
+                return Response(
+                    {"id": run.id, "uuid": run.uuid, "status": run.status}, status=status.HTTP_201_CREATED
+                )
         return Response(
-            {"id": run.id, "status": run.status}, status=status.HTTP_201_CREATED
+            {"id": run.id, "uuid":uuid, "status": run.status, "message": "Simulation already exists"},
+            status=status.HTTP_200_OK
         )
 
 

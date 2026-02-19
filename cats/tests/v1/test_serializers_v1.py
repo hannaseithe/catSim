@@ -31,37 +31,37 @@ def test_simulation_create_valid(valid_create_sim_args):
 )
 def test_simulation_create_invalid(valid_create_sim_args, invalid_field, invalid_value):
     args = valid_create_sim_args.copy()
-    args[invalid_field] = invalid_value
+    args["params"][invalid_field] = invalid_value
     serializer = SimulationCreateSerializer(data=args)
     assert not serializer.is_valid(), f"Serializer unexpectedly valid for field {invalid_field} with value {invalid_value}"
-    assert invalid_field in serializer.errors, f"Serializer is invalid, but not for field {invalid_field} with value {invalid_value}, which it should be invalid for"
+    assert invalid_field in serializer.errors.get("params"), f"Serializer is invalid, but not for field {invalid_field} with value {invalid_value}, which it should be invalid for"
 
 def test_cat_amount_too_high_for_nodes(valid_create_sim_args):
     args = valid_create_sim_args.copy()
-    args["cat_amount"] = 3
-    args["node_amount"] = 9
+    args["params"]["cat_amount"] = 3
+    args["params"]["node_amount"] = 9
     serializer = SimulationCreateSerializer(data=args)
 
     assert not serializer.is_valid(), "Serializer unexpectedly valid for 'cat_amount':3 and 'node_amount':9"
-    assert "Nodes must be at least thrice the amount of cats" in [str(msg) for msgs in serializer.errors.values() for msg in msgs]
+    assert "Nodes must be at least thrice the amount of cats" in [str(msg) for msgs in serializer.errors.get("params").values() for msg in msgs]
 
 def test_mean_edges_too_high_for_nodes(valid_create_sim_args):
     args = valid_create_sim_args.copy()
-    args["mean_edges"] = 20
-    args["node_amount"] = 40
+    args["params"]["mean_edges"] = 20
+    args["params"]["node_amount"] = 40
     serializer = SimulationCreateSerializer(data=args)
 
     assert not serializer.is_valid(), "Serializer unexpectedly valid for 'mean_edges':50 and 'node_amount':100"
-    assert "The mean of edges cant be more than half the amount of nodes" in [str(msg) for msgs in serializer.errors.values() for msg in msgs]
+    assert "The mean of edges cant be more than half the amount of nodes" in [str(msg) for msgs in serializer.errors.get("params").values() for msg in msgs]
 
 def test_var_edges_too_high_for_mean_edges(valid_create_sim_args):
     args = valid_create_sim_args.copy()
-    args["var_edges"] = 3
-    args["mean_edges"] = 9
+    args["params"]["var_edges"] = 3
+    args["params"]["mean_edges"] = 9
     serializer = SimulationCreateSerializer(data=args)
 
     assert not serializer.is_valid(), "Serializer unexpectedly valid for 'var_edges':3 and 'mean_edges':9"
-    assert "The variance of edges cant be more than a third of the mean" in [str(msg) for msgs in serializer.errors.values() for msg in msgs]
+    assert "The variance of edges cant be more than a third of the mean" in [str(msg) for msgs in serializer.errors.get("params").values() for msg in msgs]
 
 @pytest.mark.django_db
 def test_simulation_status(create_simulation):

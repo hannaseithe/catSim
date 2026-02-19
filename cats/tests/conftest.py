@@ -1,4 +1,5 @@
 from datetime import datetime, date, time
+import uuid as uuid_p
 from django.utils import timezone
 from django.urls import reverse
 from django.utils.timezone import make_aware
@@ -23,7 +24,9 @@ def create_superuser(db):
 
 @pytest.fixture
 def create_simulation(db, create_user):
-    def _create_simulation(created_at=None,user=None, params=None):
+    def _create_simulation(created_at=None,user=None, params=None, uuid= None):
+        if not uuid:
+            uuid=uuid_p.uuid4()
         if not created_at:
             created_at = timezone.now()
         elif isinstance(created_at,date):
@@ -32,7 +35,7 @@ def create_simulation(db, create_user):
             user = create_user()
         if params is None:
             params = {"iterations": 10}
-        return SimulationRun.objects.create(params = params, user=user, created_at=created_at)
+        return SimulationRun.objects.create(params = params, user=user, created_at=created_at, uuid=uuid)
     return _create_simulation
 
 @pytest.fixture
@@ -51,7 +54,7 @@ def create_results(db, create_simulation, create_user):
         if user is None:
             user = create_user()
         if run is None:
-            run = create_simulation(user=user)
+            run = create_simulation(user=user, uuid=uuid_p.uuid4())
         return SimulationResults.objects.create(run = run, metrics = metrics)
     return _create_results
 
@@ -86,14 +89,17 @@ def auth_client_with_refresh_v1(db):
 @pytest.fixture
 def valid_create_sim_args():
     return {
+        "uuid": uuid_p.uuid4(),
+        "params": {
         "iterations": 100,
-        "cat_amount": 10,
-        "node_amount": 60,
-        "mean_edges": 4,
-        "var_edges": 1.0,
-        "mean_aggressive": 0.0,
-        "var_aggressive": 0.1,
-        "mean_laziness": 0.5,
-        "var_laziness": 0.05,
+            "cat_amount": 10,
+            "node_amount": 60,
+            "mean_edges": 4,
+            "var_edges": 1.0,
+            "mean_aggressive": 0.0,
+            "var_aggressive": 0.1,
+            "mean_laziness": 0.5,
+            "var_laziness": 0.05,
+        } 
     }
 

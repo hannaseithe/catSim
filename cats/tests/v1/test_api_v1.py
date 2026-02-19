@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from django.urls import reverse
 import pytest
@@ -140,7 +141,12 @@ def test_simulation_start(mock_delay, create_user, auth_client_with_refresh_v1):
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
     url = reverse("v1-simulation-start")
-    response = auth_client.post(url)
+    uuid_val = str(uuid.uuid4())
+    response = auth_client.post(
+        url,
+        data={"uuid": uuid_val, "params": {}},
+        format="json"
+    )
 
     assert response.status_code == 201
 
@@ -148,6 +154,38 @@ def test_simulation_start(mock_delay, create_user, auth_client_with_refresh_v1):
 
     run = SimulationRun.objects.get(id = data["id"])
     assert run.status == data["status"]
+    assert str(run.uuid) == uuid_val
 
     mock_delay.assert_called_once_with(run.id)
+
+@pytest.mark.django_db
+@patch("cats.management.commands.run_simulation.run_simulation.delay")
+def test_simulation_start_idempotency(mock_delay, create_user, auth_client_with_refresh_v1):
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+    url = reverse("v1-simulation-start")
+    uuid_val = str(uuid.uuid4())
+    response1 = auth_client.post(
+        url,
+        data={"uuid": uuid_val, "params": {}},
+        format="json"
+    )
+
+    assert response1.status_code == 201
+
+    data1 = response1.data
+
+    response2 = auth_client.post(
+        url,
+        data={"uuid": uuid_val, "params": {}},
+        format="json"
+    )
+
+    data2 = response2.data
+
+    assert response2.status_code == 200
+    assert data1["id"] == data2["id"]
+
+    mock_delay.assert_called_once_with(data1["id"])
 

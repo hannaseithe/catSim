@@ -1,3 +1,4 @@
+import uuid as uuid_p
 from django.db import models
 from django.utils import timezone
 
@@ -9,6 +10,7 @@ class InvalidSimulationState(Exception):
 
 
 class SimulationRun(models.Model):
+    uuid = models.UUIDField(unique=True, editable=False, default=uuid_p.uuid4)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
