@@ -14,17 +14,17 @@ urlpatterns = [
     path(
         "simulations/<int:id>/results/",
         SimulationResultView.as_view(),
-        name="simulation-get-results",
+        name="simulation-get-results-id",
     ),
     path(
         "simulations/<int:id>/error/",
         SimulationErrorView.as_view(),
-        name="simulation-get-error",
+        name="simulation-get-error-id",
     ),
     path(
-        "simulations/<int:pk>/",
+        "simulations/<int:id>/",
         SimulationDetailView.as_view(),
-        name="simulation-get-detail",
+        name="simulation-get-detail-id",
     ),
     path(
         "simulations/",

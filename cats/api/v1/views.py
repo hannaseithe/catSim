@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.filters import OrderingFilter
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 
 from cats.api.v1.filters import SimulationFilter
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 NOT_FAILED_RESPONSE = {"detail": "Simulation has not failed"}
 NOT_COMPLETED_RESPONSE = {"detail": "Simulation has not completed"}
 
+
 class SimulationStartView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
@@ -45,44 +46,101 @@ class SimulationStartView(APIView):
 
         with transaction.atomic():
             run, created = SimulationRun.objects.get_or_create(
-                uuid=uuid,
-                defaults={
-                    "user": request.user,
-                    "params": params
-                }
+                uuid=uuid, defaults={"user": request.user, "params": params}
             )
             if created:
-                run_simulation.delay(run.id)
+                task_result = run_simulation.delay(run.id)
+                run.celery_task_id = task_result.id
+                run.save()
                 logger.info(
                     f"Queued simulation {run.id} with seed {params['seed']} and parameters: {params}"
                 )
                 return Response(
-                    {"id": run.id, "uuid": run.uuid, "status": run.status}, status=status.HTTP_201_CREATED
+                    {"id": run.id, "uuid": run.uuid, "status": run.status},
+                    status=status.HTTP_201_CREATED,
                 )
         return Response(
-            {"id": run.id, "uuid":uuid, "status": run.status, "message": "Simulation already exists"},
-            status=status.HTTP_200_OK
+            {
+                "id": run.id,
+                "uuid": uuid,
+                "status": run.status,
+                "message": "Simulation already exists",
+            },
+            status=status.HTTP_200_OK,
         )
 
 
-class SimulationDetailView(RetrieveAPIView):
+class SimulationCancelView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
-    serializer_class = SimulationStatusSerializer
-    http_method_names = ["get"]
 
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_staff:
-            return SimulationRun.objects.all()
-        return SimulationRun.objects.filter(user=user)
-    
+    def post(self, request, simulation_id=None, simulation_uuid=None):
+        if simulation_id:
+            run = get_object_or_404(SimulationRun, id=simulation_id)
+        elif simulation_uuid:
+            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
+        else:
+            return Response({"detail": "No identifier provided."}, status=400)
+
+        if not run:
+            return Response(
+                {
+                    **{
+                        f"{'id' if simulation_id else 'uuid'}": simulation_id
+                        if simulation_id
+                        else simulation_uuid
+                    },
+                    "detail": f"No SimulationRun with {f'id: {simulation_id}' if simulation_id else f'uuid: {simulation_uuid}'} exists.",
+                },
+                status=404,
+            )
+
+        identifiers = {"id": run.id, "uuid": run.uuid}
+        if run.status not in (
+            SimulationRun.Status.RUNNING,
+            SimulationRun.Status.PENDING,
+        ):
+            print(f"The status of the simulation: {run.status}")
+            return Response(
+                {
+                    **identifiers,
+                    "detail": "The SimulationRun is not pending nor running, and can therefore not be canceled.",
+                },
+                status=409,
+            )
+        run.cancel()
+        return Response(
+            {**identifiers, "detail": "The SimulationRun has been canceled."},
+            status=200,
+        )
+
+
+class SimulationDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
+    def get(self, request, id=None, simulation_uuid=None):
+        if id:
+            run = get_object_or_404(SimulationRun, id=id)
+        elif simulation_uuid:
+            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
+        else:
+            return Response({"detail": "No identifier provided."}, status=400)
+
+        self.check_object_permissions(request, run)
+        serializer = SimulationStatusSerializer(run)
+        return Response(serializer.data)
 
 
 class SimulationErrorView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
-    def get(self, request, id):
-        run = get_object_or_404(SimulationRun, id=id)
+    def get(self, request, id=None, simulation_uuid=None):
+        if id:
+            run = get_object_or_404(SimulationRun, id=id)
+        elif simulation_uuid:
+            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
+        else:
+            return Response({"detail": "No identifier provided."}, status=400)
+
         if run.status != SimulationRun.Status.FAILED:
             return Response(
                 NOT_FAILED_RESPONSE,
@@ -95,8 +153,14 @@ class SimulationErrorView(APIView):
 class SimulationResultView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
-    def get(self, request, id):
-        run = get_object_or_404(SimulationRun, id=id)
+    def get(self, request, id=None, simulation_uuid=None):
+        if id:
+            run = get_object_or_404(SimulationRun, id=id)
+        elif simulation_uuid:
+            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
+        else:
+            return Response({"detail": "No identifier provided."}, status=400)
+
         if run.status != SimulationRun.Status.FINISHED:
             return Response(
                 NOT_COMPLETED_RESPONSE,
@@ -113,8 +177,8 @@ class SimulationListView(ListAPIView):
 
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SimulationFilter
-    ordering_fields = ['created_at', 'iterations', 'cat_amount', 'node_amount']
-    ordering = ['-created_at']
+    ordering_fields = ["created_at", "iterations", "cat_amount", "node_amount"]
+    ordering = ["-created_at"]
 
     pagination_class = SimulationPagination
 
@@ -125,7 +189,7 @@ class SimulationListView(ListAPIView):
             qs = SimulationRun.objects.all()
         else:
             qs = SimulationRun.objects.filter(user=user)
-        
+
         qs = qs.annotate(
             iterations=Cast(F("params__iterations"), IntegerField()),
             cat_amount=Cast(F("params__cat_amount"), IntegerField()),

@@ -4,7 +4,7 @@ from rest_framework import serializers
 from cats.models import SimulationResults, SimulationRun
 
 class SimulationParamsSerializer(serializers.Serializer):
-    iterations = serializers.IntegerField(default=1000, min_value=1, max_value=10000)
+    iterations = serializers.IntegerField(default=1000, min_value=1, max_value=100000)
     cat_amount = serializers.IntegerField(default=10, min_value=2, max_value= 200)
     node_amount = serializers.IntegerField(default=60, min_value=3, max_value=1000)
     mean_edges = serializers.IntegerField(default=4, min_value=2, max_value=20)

@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    SimulationCancelView,
     SimulationDetailView,
     SimulationErrorView,
     SimulationListView,
@@ -11,20 +12,37 @@ urlpatterns = [
     path(
         "simulations/start/", SimulationStartView.as_view(), name="v1-simulation-start"
     ),
+    path('simulations/<int:simulation_id>/cancel/', SimulationCancelView.as_view(),name="v1-simulation-cancel-id"),
+    path('simulations/<uuid:simulation_uuid>/cancel/', SimulationCancelView.as_view(), name="v1-simulation-cancel-uuid"),
     path(
         "simulations/<int:id>/results/",
         SimulationResultView.as_view(),
-        name="v1-simulation-get-results",
+        name="v1-simulation-get-results-id",
+    ),
+        path(
+        "simulations/<uuid:simulation_uuid>/results/",
+        SimulationResultView.as_view(),
+        name="v1-simulation-get-results-uuid",
     ),
     path(
         "simulations/<int:id>/error/",
         SimulationErrorView.as_view(),
-        name="v1-simulation-get-error",
+        name="v1-simulation-get-error-id",
     ),
     path(
-        "simulations/<int:pk>/",
+        "simulations/<uuid:simulation_uuid>/error/",
+        SimulationErrorView.as_view(),
+        name="v1-simulation-get-error-uuid",
+    ),
+    path(
+        "simulations/<int:id>/",
         SimulationDetailView.as_view(),
-        name="v1-simulation-get-detail",
+        name="v1-simulation-get-detail-id",
+    ),
+    path(
+        "simulations/<uuid:simulation_uuid>/",
+        SimulationDetailView.as_view(),
+        name="v1-simulation-get-detail-uuid",
     ),
     path(
         "simulations/",

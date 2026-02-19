@@ -54,6 +54,7 @@ class SimulationDetailView(DeprecatedEndpointMixin, RetrieveAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationStatusSerializer
     http_method_names = ["get"]
+    lookup_field="id"
 
     def get_queryset(self):
         user = self.request.user

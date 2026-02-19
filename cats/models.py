@@ -1,4 +1,5 @@
 import uuid as uuid_p
+from celery.result import AsyncResult
 from django.db import models
 from django.utils import timezone
 
@@ -27,12 +28,14 @@ class SimulationRun(models.Model):
         RUNNING = "running", "Running"
         FINISHED = "finished", "Finished"
         FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
 
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
 
     error_message = models.TextField(null=True, blank=True)
+    celery_task_id = models.CharField(max_length=50, blank=True, null=True)
 
     def mark_running(self):
         if self.status != self.Status.PENDING:
@@ -61,6 +64,24 @@ class SimulationRun(models.Model):
         self.finished_at = timezone.now()
         self.error_message = error_message
         self.save(update_fields=["status", "finished_at", "error_message"])
+
+    def mark_cancelled(self):
+        if self.status not in (self.Status.RUNNING, self.Status.PENDING):
+            raise InvalidSimulationState(
+                f"Cannot cancel simulation in state '{self.status}'"
+            )
+        self.status = self.Status.CANCELED
+        self.finished_at = timezone.now()
+        self.save(update_fields=["status", "finished_at"])
+
+    def cancel(self):
+        if self.status not in (self.Status.RUNNING, self.Status.PENDING):
+            raise InvalidSimulationState(
+                f"Cannot cancel simulation in state '{self.status}'"
+            )
+        task = AsyncResult(self.celery_task_id)
+        task.revoke(terminate=True)
+        self.mark_cancelled()
 
 
 class SimulationResults(models.Model):

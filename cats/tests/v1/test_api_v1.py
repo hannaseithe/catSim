@@ -1,5 +1,6 @@
+import json
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from django.urls import reverse
 import pytest
 
@@ -55,7 +56,7 @@ def test_simulation_get_detail(api_client, create_simulation, create_user, auth_
     sim_data = SimulationStatusSerializer(sim).data
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
-    url = reverse("v1-simulation-get-detail", args=[sim.id])
+    url = reverse("v1-simulation-get-detail-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 200
@@ -73,7 +74,7 @@ def test_simulation_get_error(create_simulation, create_user, auth_client_with_r
     sim_data = SimulationErrorSerializer(sim).data
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
-    url = reverse("v1-simulation-get-error", args=[sim.id])
+    url = reverse("v1-simulation-get-error-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 200
@@ -81,6 +82,22 @@ def test_simulation_get_error(create_simulation, create_user, auth_client_with_r
     assert isinstance(data, dict)
     assert data == sim_data
 
+@pytest.mark.django_db
+def test_simulation_get_error_with_uuid(create_simulation, create_user, auth_client_with_refresh_v1):
+    user = create_user(email="test1@email.com",password="test1password")
+    sim = create_simulation(user = user)
+    sim.mark_running()
+    sim.mark_failed("This is an error message")
+    sim_data = SimulationErrorSerializer(sim).data
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+    url = reverse("v1-simulation-get-error-uuid", args=[sim.uuid])
+    response = auth_client.get(url)
+
+    assert response.status_code == 200
+    data = response.data
+    assert isinstance(data, dict)
+    assert data == sim_data
 
 @pytest.mark.django_db
 def test_simulation_get_error_if_not_failed(create_simulation, create_user, auth_client_with_refresh_v1):
@@ -90,7 +107,7 @@ def test_simulation_get_error_if_not_failed(create_simulation, create_user, auth
     sim.mark_completed()
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
-    url = reverse("v1-simulation-get-error", args=[sim.id])
+    url = reverse("v1-simulation-get-error-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 409
@@ -109,7 +126,7 @@ def test_simulation_get_results(create_results, create_user, auth_client_with_re
     results_data = SimulationResultSerializer(results).data
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
-    url = reverse("v1-simulation-get-results", args=[sim.id])
+    url = reverse("v1-simulation-get-results-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 200
@@ -126,7 +143,7 @@ def test_simulation_get_results_if_not_finished(create_results, create_user, aut
     sim.mark_running()
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
-    url = reverse("v1-simulation-get-results", args=[sim.id])
+    url = reverse("v1-simulation-get-results-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 409
@@ -135,8 +152,12 @@ def test_simulation_get_results_if_not_finished(create_results, create_user, aut
     assert data == NOT_COMPLETED_RESPONSE
 
 @pytest.mark.django_db
-@patch("cats.management.commands.run_simulation.run_simulation.delay")
+@patch("cats.api.v1.views.run_simulation.delay")
 def test_simulation_start(mock_delay, create_user, auth_client_with_refresh_v1):
+    mock_task = MagicMock()
+    mock_task.id = "fake-task-id-123"
+    mock_delay.return_value = mock_task
+
     user = create_user(email="test1@email.com",password="test1password")
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
@@ -159,8 +180,12 @@ def test_simulation_start(mock_delay, create_user, auth_client_with_refresh_v1):
     mock_delay.assert_called_once_with(run.id)
 
 @pytest.mark.django_db
-@patch("cats.management.commands.run_simulation.run_simulation.delay")
+@patch("cats.api.v1.views.run_simulation.delay")
 def test_simulation_start_idempotency(mock_delay, create_user, auth_client_with_refresh_v1):
+    mock_task = MagicMock()
+    mock_task.id = "fake-task-id-123"
+    mock_delay.return_value = mock_task
+
     user = create_user(email="test1@email.com",password="test1password")
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
@@ -188,4 +213,75 @@ def test_simulation_start_idempotency(mock_delay, create_user, auth_client_with_
     assert data1["id"] == data2["id"]
 
     mock_delay.assert_called_once_with(data1["id"])
+
+@patch("cats.models.AsyncResult")
+def test_simulation_cancel(mock_async_result, create_user, auth_client_with_refresh_v1):
+
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.RUNNING,
+        celery_task_id="fake-task-id-123",
+        params=json.dumps({})
+    )
+
+    mock_task_instance = MagicMock()
+    mock_async_result.return_value = mock_task_instance
+    mock_task_instance.revoke.return_value = None 
+
+    url_cancel = reverse("v1-simulation-cancel-id", args=[run.id])
+    response_cancel = auth_client.post(
+        url_cancel
+    )
+
+    print(response_cancel)
+
+    assert response_cancel.status_code == 200
+    assert response_cancel.data["id"] == run.id
+    assert response_cancel.data["detail"] == "The SimulationRun has been canceled."
+
+    run.refresh_from_db()
+
+    assert run.status == SimulationRun.Status.CANCELED
+
+    mock_async_result.assert_called_once_with("fake-task-id-123")
+    mock_task_instance.revoke.assert_called_once_with(terminate=True)
+
+@patch("cats.models.AsyncResult")
+def test_simulation_cancel_finished(mock_async_result, create_user, auth_client_with_refresh_v1):
+
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.RUNNING,
+        celery_task_id="fake-task-id-123",
+        params=json.dumps({})
+    )
+    run.mark_completed()
+
+    url_cancel = reverse("v1-simulation-cancel-id", args=[run.id])
+    response_cancel = auth_client.post(
+        url_cancel
+    )
+
+    print(response_cancel)
+
+    assert response_cancel.status_code == 409
+    assert response_cancel.data["id"] == run.id
+    assert response_cancel.data["detail"] == "The SimulationRun is not pending nor running, and can therefore not be canceled."
+
+    run.refresh_from_db()
+
+    assert run.status == SimulationRun.Status.FINISHED
+
+    assert not mock_async_result.called
+
+
+
 

@@ -54,7 +54,7 @@ def test_simulation_get_detail(api_client, create_simulation, create_user, auth_
     sim_data = SimulationStatusSerializer(sim).data
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
-    url = reverse("simulation-get-detail", args=[sim.id])
+    url = reverse("simulation-get-detail-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 200
@@ -72,7 +72,7 @@ def test_simulation_get_error(create_simulation, create_user, auth_client_with_r
     sim_data = SimulationErrorSerializer(sim).data
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
-    url = reverse("simulation-get-error", args=[sim.id])
+    url = reverse("simulation-get-error-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 200
@@ -89,7 +89,7 @@ def test_simulation_get_error_if_not_failed(create_simulation, create_user, auth
     sim.mark_completed()
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
-    url = reverse("simulation-get-error", args=[sim.id])
+    url = reverse("simulation-get-error-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 409
@@ -108,7 +108,7 @@ def test_simulation_get_results(create_results, create_user, auth_client_with_re
     results_data = SimulationResultSerializer(results).data
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
-    url = reverse("simulation-get-results", args=[sim.id])
+    url = reverse("simulation-get-results-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 200
@@ -125,7 +125,7 @@ def test_simulation_get_results_if_not_finished(create_results, create_user, aut
     sim.mark_running()
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
-    url = reverse("simulation-get-results", args=[sim.id])
+    url = reverse("simulation-get-results-id", args=[sim.id])
     response = auth_client.get(url)
 
     assert response.status_code == 409
