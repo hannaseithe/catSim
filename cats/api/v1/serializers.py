@@ -1,9 +1,20 @@
 from decimal import Decimal
+from typing import Dict, List, Union
 from rest_framework import serializers
 
 from cats.models import SimulationResults, SimulationRun
 
-class SimulationParamsSerializer(serializers.Serializer):
+JSONType = Union[
+    Dict[str, "JSONType"],
+    List["JSONType"],
+    str,
+    int,
+    float,
+    bool,
+    None,
+]
+
+class SimulationParamsSerializerV1(serializers.Serializer):
     iterations = serializers.IntegerField(default=1000, min_value=1, max_value=10000)
     cat_amount = serializers.IntegerField(default=10, min_value=2, max_value= 200)
     node_amount = serializers.IntegerField(default=60, min_value=3, max_value=1000)
@@ -33,24 +44,24 @@ class SimulationParamsSerializer(serializers.Serializer):
         return data
 
 
-class SimulationCreateSerializer(serializers.Serializer):
+class SimulationCreateSerializerV1(serializers.Serializer):
     uuid = serializers.UUIDField(
         required=True,
         help_text="Client-generated UUID used for idempotent simulation creation."
         )
-    params = SimulationParamsSerializer()
+    params = SimulationParamsSerializerV1()
 
     
 
-class SimulationStatusSerializer(serializers.ModelSerializer):
+class SimulationStatusSerializerV1(serializers.ModelSerializer):
     params = serializers.SerializerMethodField()
     class Meta:
         model = SimulationRun
         fields = ["id", "uuid", "status", "created_at", "started_at", "finished_at", "params", "user"]
     
-    def get_params(self, obj):
-        # Recursively convert any Decimal in JSON to float
-        def convert(value):
+
+    def get_params(self, obj) -> JSONType:
+        def convert(value: JSONType) -> JSONType:
             if isinstance(value, dict):
                 return {k: convert(v) for k, v in value.items()}
             elif isinstance(value, list):
@@ -62,7 +73,7 @@ class SimulationStatusSerializer(serializers.ModelSerializer):
         return convert(obj.params)
 
 
-class SimulationErrorSerializer(serializers.ModelSerializer):
+class SimulationErrorSerializerV1(serializers.ModelSerializer):
     error = serializers.CharField(source="error_message", read_only=True)
 
     class Meta:
@@ -70,7 +81,7 @@ class SimulationErrorSerializer(serializers.ModelSerializer):
         fields = ["id", "uuid", "status", "error"]
 
 
-class SimulationResultSerializer(serializers.ModelSerializer):
+class SimulationResultSerializerV1(serializers.ModelSerializer):
     run_id = serializers.PrimaryKeyRelatedField(source="run", read_only=True)
 
     class Meta:

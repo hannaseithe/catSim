@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from django.urls import reverse
 from django.utils import timezone
 
-from cats.api.v1.serializers import SimulationStatusSerializer
+from cats.api.v1.serializers import SimulationStatusSerializerV1
 
 
 def test_filter_by_status(auth_client_with_refresh_v1, create_user, create_simulation_list):
@@ -16,7 +16,7 @@ def test_filter_by_status(auth_client_with_refresh_v1, create_user, create_simul
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 5, "Length of response list is not 5"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim_list[-1]).data.get("id"), "First returned Simulation is different from first created simulation"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim_list[-1]).data.get("id"), "First returned Simulation is different from first created simulation"
 
     response2 = auth_client.get(url, { "status": "finished"})
     assert response2.status_code == 200, "response status code not 200"
@@ -41,7 +41,7 @@ def test_filter_by_created_at_max(auth_client_with_refresh_v1, create_user, crea
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 5, "Length of response list is not 5"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim_list[-1]).data.get("id"), "First returned Simulation is different from first created simulation"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim_list[-1]).data.get("id"), "First returned Simulation is different from first created simulation"
 
     response2 = auth_client.get(url, {"created_at_max": before_creation_iso})
     assert response2.status_code == 200, "response status code not 200"
@@ -67,15 +67,15 @@ def test_filter_by_created_at_with_date(auth_client_with_refresh_v1, create_user
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 1, "Length of response list is not 1"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim3).data.get("id"), "First returned Simulation is different from third created simulation"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim3).data.get("id"), "First returned Simulation is different from third created simulation"
 
     response2 = auth_client.get(url, {"created_at_max": today.isoformat()})
     
     assert response2.status_code == 200, "response status code not 200"
     sims = response2.data.get("results")
     assert len(sims) == 2, "Length of response list is not 2"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim2).data.get("id"), "First returned Simulation is different from second created simulation"
-    assert sims[1].get("id") == SimulationStatusSerializer(sim1).data.get("id"), "Second returned Simulation is different from first created simulation"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim2).data.get("id"), "First returned Simulation is different from second created simulation"
+    assert sims[1].get("id") == SimulationStatusSerializerV1(sim1).data.get("id"), "Second returned Simulation is different from first created simulation"
 
 def test_filter_by_created_at_min(auth_client_with_refresh_v1, create_user, create_simulation_list):
     before_creation = timezone.now()
@@ -95,7 +95,7 @@ def test_filter_by_created_at_min(auth_client_with_refresh_v1, create_user, crea
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 5, "Length of response list is not 5"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim_list[-1]).data.get("id"), "First returned Simulation is different from first created simulation"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim_list[-1]).data.get("id"), "First returned Simulation is different from first created simulation"
 
     response2 = auth_client.get(url, {"created_at_min": after_creation_iso})
     assert response2.status_code == 200, "response status code not 200"
@@ -122,12 +122,12 @@ def test_filter_by_user(auth_client_with_refresh_v1, create_user, create_superus
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 5, "Length of response list is not 5"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim_list1[-1]).data.get("id"), "First returned Simulation is different from first created simulation in first batch"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim_list1[-1]).data.get("id"), "First returned Simulation is different from first created simulation in first batch"
 
     assert response2.status_code == 200, "response status code not 200"
     sims = response2.data.get("results")
     assert len(sims) == 5, "Length of response list is not 5"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim_list1[-1]).data.get("id"), "First returned Simulation is different from first created simulation in first batch"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim_list1[-1]).data.get("id"), "First returned Simulation is different from first created simulation in first batch"
 
     response3 = auth_client1.get(url, {"user": user2.id})
     response4 = auth_client2.get(url, {"user": user2.id})
@@ -139,7 +139,7 @@ def test_filter_by_user(auth_client_with_refresh_v1, create_user, create_superus
     assert response4.status_code == 200, "response status code not 200"
     sims = response4.data.get("results")
     assert len(sims) == 5, "Length of response list is not 5"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim_list2[-1]).data.get("id"), "First returned Simulation is different from first created simulation in second batch"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim_list2[-1]).data.get("id"), "First returned Simulation is different from first created simulation in second batch"
 
 def test_filter_by_iterations(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -152,7 +152,7 @@ def test_filter_by_iterations(auth_client_with_refresh_v1, create_user, create_s
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 1, "Length of response list is not 1"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[0]).data.get("id"), "First returned Simulation is different from first created simulation"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[0]).data.get("id"), "First returned Simulation is different from first created simulation"
 
 def test_filter_by_iterations_max(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -165,7 +165,7 @@ def test_filter_by_iterations_max(auth_client_with_refresh_v1, create_user, crea
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 2, "Length of response list is not 2"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[0]).data.get("id"), "First returned Simulation is different from first created simulation"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[0]).data.get("id"), "First returned Simulation is different from first created simulation"
 
 def test_filter_by_iterations_min(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -178,7 +178,7 @@ def test_filter_by_iterations_min(auth_client_with_refresh_v1, create_user, crea
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 4, "Length of response list is not 4"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[1]).data.get("id"), "First returned Simulation is different from second created simulation"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[1]).data.get("id"), "First returned Simulation is different from second created simulation"
 
 def test_filter_by_cat_amounts(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -191,7 +191,7 @@ def test_filter_by_cat_amounts(auth_client_with_refresh_v1, create_user, create_
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 1, "Length of response list is not 1"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[1]).data.get("id"), "First returned Simulation is different from second created simulation"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[1]).data.get("id"), "First returned Simulation is different from second created simulation"
 
 def test_filter_by_cat_amounts_max(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -204,7 +204,7 @@ def test_filter_by_cat_amounts_max(auth_client_with_refresh_v1, create_user, cre
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 2, "Length of response list is not 2"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[0]).data.get("id"), "First returned Simulation is different from first created simulation"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[0]).data.get("id"), "First returned Simulation is different from first created simulation"
 
 def test_filter_by_cat_amounts_min(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -217,7 +217,7 @@ def test_filter_by_cat_amounts_min(auth_client_with_refresh_v1, create_user, cre
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 4, "Length of response list is not 4"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[1]).data.get("id"), "First Simulation of List response is different from second simulation of list in memory"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[1]).data.get("id"), "First Simulation of List response is different from second simulation of list in memory"
 
 def test_filter_by_node_amounts(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -230,7 +230,7 @@ def test_filter_by_node_amounts(auth_client_with_refresh_v1, create_user, create
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 1, "Length of response list is not 1"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[1]).data.get("id"), "First Simulation of List response is different from first simulation of list in memory"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[1]).data.get("id"), "First Simulation of List response is different from first simulation of list in memory"
 
 def test_filter_by_node_amounts_max(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -243,7 +243,7 @@ def test_filter_by_node_amounts_max(auth_client_with_refresh_v1, create_user, cr
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 2, "Length of response list is not 2"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[0]).data.get("id"), "First Simulation of List response is different from first simulation of list in memory"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[0]).data.get("id"), "First Simulation of List response is different from first simulation of list in memory"
 
 def test_filter_by_node_amounts_min(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -256,7 +256,7 @@ def test_filter_by_node_amounts_min(auth_client_with_refresh_v1, create_user, cr
     assert response1.status_code == 200, "response status code not 200"
     sims = response1.data.get("results")
     assert len(sims) == 4, "Length of response list is not 4"
-    assert sims[-1].get("id") == SimulationStatusSerializer(sim_list[1]).data.get("id"), "First Simulation of List response is different from first simulation of list in memory"
+    assert sims[-1].get("id") == SimulationStatusSerializerV1(sim_list[1]).data.get("id"), "First Simulation of List response is different from first simulation of list in memory"
 
 def test_ordering(auth_client_with_refresh_v1, create_user, create_simulation_list):
     user = create_user(email="test1@email.com",password="test1password")
@@ -269,5 +269,5 @@ def test_ordering(auth_client_with_refresh_v1, create_user, create_simulation_li
     sims = response.data.get("results")
 
     assert len(sims) == 10 , "The returned list is not 10 items long"
-    assert sims[0].get("id") == SimulationStatusSerializer(sim_list1[0]).data.get("id"), "First returned Simulation does not equal first sim of first created batch"
-    assert sims[1].get("id") == SimulationStatusSerializer(sim_list2[0]).data.get("id"), "Second returned Simulation does not equal first sim of second created batch"
+    assert sims[0].get("id") == SimulationStatusSerializerV1(sim_list1[0]).data.get("id"), "First returned Simulation does not equal first sim of first created batch"
+    assert sims[1].get("id") == SimulationStatusSerializerV1(sim_list2[0]).data.get("id"), "Second returned Simulation does not equal first sim of second created batch"

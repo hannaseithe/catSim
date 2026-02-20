@@ -5,9 +5,9 @@ from django.urls import reverse
 import pytest
 
 from cats.api.v1.serializers import (
-    SimulationErrorSerializer,
-    SimulationResultSerializer,
-    SimulationStatusSerializer,
+    SimulationErrorSerializerV1,
+    SimulationResultSerializerV1,
+    SimulationStatusSerializerV1,
 )
 from cats.api.v1.views import NOT_COMPLETED_RESPONSE, NOT_FAILED_RESPONSE
 from cats.models import SimulationRun
@@ -40,8 +40,8 @@ def test_simulation_list(create_simulation, create_user, auth_client_with_refres
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
     url = reverse("v1-simulation-list")
     response = auth_client.get(url)
-    sim1_data = SimulationStatusSerializer(sim1).data
-    sim2_data = SimulationStatusSerializer(sim2).data
+    sim1_data = SimulationStatusSerializerV1(sim1).data
+    sim2_data = SimulationStatusSerializerV1(sim2).data
 
     assert response.status_code == 200
     sims = response.data.get("results")
@@ -53,7 +53,7 @@ def test_simulation_list(create_simulation, create_user, auth_client_with_refres
 def test_simulation_get_detail(api_client, create_simulation, create_user, auth_client_with_refresh_v1):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user=user)
-    sim_data = SimulationStatusSerializer(sim).data
+    sim_data = SimulationStatusSerializerV1(sim).data
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
     url = reverse("v1-simulation-get-detail-id", args=[sim.id])
@@ -71,7 +71,7 @@ def test_simulation_get_error(create_simulation, create_user, auth_client_with_r
     sim = create_simulation(user = user)
     sim.mark_running()
     sim.mark_failed("This is an error message")
-    sim_data = SimulationErrorSerializer(sim).data
+    sim_data = SimulationErrorSerializerV1(sim).data
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
     url = reverse("v1-simulation-get-error-id", args=[sim.id])
@@ -88,7 +88,7 @@ def test_simulation_get_error_with_uuid(create_simulation, create_user, auth_cli
     sim = create_simulation(user = user)
     sim.mark_running()
     sim.mark_failed("This is an error message")
-    sim_data = SimulationErrorSerializer(sim).data
+    sim_data = SimulationErrorSerializerV1(sim).data
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
     url = reverse("v1-simulation-get-error-uuid", args=[sim.uuid])
@@ -123,7 +123,7 @@ def test_simulation_get_results(create_results, create_user, auth_client_with_re
     sim = results.run
     sim.mark_running()
     sim.mark_completed()
-    results_data = SimulationResultSerializer(results).data
+    results_data = SimulationResultSerializerV1(results).data
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
     url = reverse("v1-simulation-get-results-id", args=[sim.id])

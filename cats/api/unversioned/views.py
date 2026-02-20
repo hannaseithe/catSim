@@ -4,12 +4,14 @@ from django.db.models import F, IntegerField
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from cats.api.unversioned.filters import SimulationFilter
 from cats.api.paginations import SimulationPagination
@@ -29,8 +31,27 @@ logger = logging.getLogger(__name__)
 NOT_FAILED_RESPONSE = {"detail": "Simulation has not failed"}
 NOT_COMPLETED_RESPONSE = {"detail": "Simulation has not completed"}
 
+@extend_schema(
+    deprecated=True,
+    description="This endpoint is deprecated; use /api/v1/ instead.",
+)
+class CustomTokenObtainPairView(TokenObtainPairView):
+    pass
+
+@extend_schema(
+    deprecated=True,
+    description="This endpoint is deprecated; use /api/v1/ instead.",
+)
+class CustomTokenRefreshView(TokenRefreshView):
+    pass
+
+@extend_schema(
+    deprecated=True,
+    description="This endpoint is deprecated; use /api/v1/ instead.",
+)
 class SimulationStartView(DeprecatedEndpointMixin, APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationCreateSerializer
 
     def post(self, request):
         serializer = SimulationCreateSerializer(data=request.data)
@@ -49,7 +70,10 @@ class SimulationStartView(DeprecatedEndpointMixin, APIView):
             {"id": run.id, "status": run.status}, status=status.HTTP_201_CREATED
         )
 
-
+@extend_schema(
+    deprecated=True,
+    description="This endpoint is deprecated; use /api/v1/ instead.",
+)
 class SimulationDetailView(DeprecatedEndpointMixin, RetrieveAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationStatusSerializer
@@ -63,9 +87,13 @@ class SimulationDetailView(DeprecatedEndpointMixin, RetrieveAPIView):
         return SimulationRun.objects.filter(user=user)
     
 
-
+@extend_schema(
+    deprecated=True,
+    description="This endpoint is deprecated; use /api/v1/ instead.",
+)
 class SimulationErrorView(DeprecatedEndpointMixin, APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationErrorSerializer
 
     def get(self, request, id):
         run = get_object_or_404(SimulationRun, id=id)
@@ -77,9 +105,13 @@ class SimulationErrorView(DeprecatedEndpointMixin, APIView):
         serializer = SimulationErrorSerializer(run)
         return Response(serializer.data)
 
-
+@extend_schema(
+    deprecated=True,
+    description="This endpoint is deprecated; use /api/v1/ instead.",
+)
 class SimulationResultView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationResultSerializer
 
     def get(self, request, id):
         run = get_object_or_404(SimulationRun, id=id)
@@ -92,7 +124,10 @@ class SimulationResultView(APIView):
         serializer = SimulationResultSerializer(result)
         return Response(serializer.data)
 
-
+@extend_schema(
+    deprecated=True,
+    description="This endpoint is deprecated; use /api/v1/ instead.",
+)
 class SimulationListView(DeprecatedEndpointMixin, ListAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationStatusSerializer
@@ -105,6 +140,8 @@ class SimulationListView(DeprecatedEndpointMixin, ListAPIView):
     pagination_class = SimulationPagination
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return SimulationRun.objects.none()
         user = self.request.user
 
         if user.is_staff:

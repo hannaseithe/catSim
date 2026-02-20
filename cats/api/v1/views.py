@@ -5,21 +5,23 @@ from django.db.models import F, IntegerField
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from cats.api.v1.filters import SimulationFilter
 from cats.api.paginations import SimulationPagination
 from cats.api.permissions import IsOwnerOrAdmin
 from cats.api.v1.serializers import (
-    SimulationCreateSerializer,
-    SimulationErrorSerializer,
-    SimulationResultSerializer,
-    SimulationStatusSerializer,
+    SimulationCreateSerializerV1,
+    SimulationErrorSerializerV1,
+    SimulationResultSerializerV1,
+    SimulationStatusSerializerV1,
 )
 from cats.models import SimulationResults, SimulationRun
 from cats.tasks import run_simulation
@@ -29,12 +31,42 @@ logger = logging.getLogger(__name__)
 NOT_FAILED_RESPONSE = {"detail": "Simulation has not failed"}
 NOT_COMPLETED_RESPONSE = {"detail": "Simulation has not completed"}
 
+class TokenRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+
+class TokenResponseSerializer(serializers.Serializer):
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+
+class TokenRefreshRequestSerializer(serializers.Serializer):
+    access = serializers.CharField()
+
+class TokenRefreshResponseSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+@extend_schema(
+    request=TokenRequestSerializer,
+    responses=TokenResponseSerializer,
+)
+class CustomTokenObtainPairViewV1(TokenObtainPairView):
+    pass
+
+@extend_schema(
+    request=TokenRefreshRequestSerializer,
+    responses=TokenRefreshResponseSerializer,
+)
+class CustomTokenRefreshViewV1(TokenRefreshView):
+    pass
+
 
 class SimulationStartView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationCreateSerializerV1
 
     def post(self, request):
-        serializer = SimulationCreateSerializer(data=request.data)
+        serializer = SimulationCreateSerializerV1(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         print(serializer.validated_data)
@@ -69,7 +101,42 @@ class SimulationStartView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
+@extend_schema(
+    request=None,
+    responses={
+        200: {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "uuid": {"type": "string"},
+                "detail": {"type": "string", "example": "The SimulationRun has been canceled."},
+            },
+        },
+        409: {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "uuid": {"type": "string"},
+                "detail": {
+                    "type": "string",
+                    "example": "The SimulationRun is not pending nor running, and can therefore not be canceled.",
+                },
+            },
+        },
+        400: {
+            "type": "object",
+            "properties": {
+                "detail": {"type": "string", "example": "No identifier provided."},
+            },
+        },
+        404: {
+            "type": "object",
+            "properties": {
+                "detail": {"type": "string"},
+            },
+        },
+    },
+)
 class SimulationCancelView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
@@ -88,7 +155,6 @@ class SimulationCancelView(APIView):
             SimulationRun.Status.RUNNING,
             SimulationRun.Status.PENDING,
         ):
-            print(f"The status of the simulation: {run.status}")
             return Response(
                 {
                     **identifiers,
@@ -102,6 +168,42 @@ class SimulationCancelView(APIView):
             status=200,
         )
     
+@extend_schema(
+    request=None,
+    responses={
+        200: {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "uuid": {"type": "string"},
+                "detail": {"type": "string", "example": "The SimulationRun has been deleted."},
+            },
+        },
+        409: {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "uuid": {"type": "string"},
+                "detail": {
+                    "type": "string",
+                    "example": "The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first.",
+                },
+            },
+        },
+        400: {
+            "type": "object",
+            "properties": {
+                "detail": {"type": "string", "example": "No identifier provided."},
+            },
+        },
+        404: {
+            "type": "object",
+            "properties": {
+                "detail": {"type": "string"},
+            },
+        },
+    },
+)
 class SimulationDeleteView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
@@ -126,7 +228,7 @@ class SimulationDeleteView(APIView):
             return Response(
                 {
                     **identifiers,
-                    "detail": "The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first",
+                    "detail": "The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first.",
                 },
                 status=409,
             )
@@ -139,6 +241,7 @@ class SimulationDeleteView(APIView):
 
 class SimulationDetailView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationStatusSerializerV1
 
     def get(self, request, id=None, simulation_uuid=None):
         if id:
@@ -149,12 +252,13 @@ class SimulationDetailView(APIView):
             return Response({"detail": "No identifier provided."}, status=400)
 
         self.check_object_permissions(request, run)
-        serializer = SimulationStatusSerializer(run)
+        serializer = SimulationStatusSerializerV1(run)
         return Response(serializer.data)
 
 
 class SimulationErrorView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationErrorSerializerV1
 
     def get(self, request, id=None, simulation_uuid=None):
         if id:
@@ -169,12 +273,13 @@ class SimulationErrorView(APIView):
                 NOT_FAILED_RESPONSE,
                 status=status.HTTP_409_CONFLICT,
             )
-        serializer = SimulationErrorSerializer(run)
+        serializer = SimulationErrorSerializerV1(run)
         return Response(serializer.data)
 
 
 class SimulationResultView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    serializer_class = SimulationResultSerializerV1
 
     def get(self, request, id=None, simulation_uuid=None):
         if id:
@@ -190,13 +295,40 @@ class SimulationResultView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         result = get_object_or_404(SimulationResults, run__id=id)
-        serializer = SimulationResultSerializer(result)
+        serializer = SimulationResultSerializerV1(result)
         return Response(serializer.data)
 
-
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name='ordering',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Field to order by. Prefix with "-" for descending.',
+            enum=['created_at', '-created_at', 'iterations', '-iterations', 'cat_amount', '-cat_amount', 'node_amount', '-node_amount'],
+            required=False
+        ),
+        OpenApiParameter(
+            name='page',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Page number within the paginated result set.',
+            required=False,
+            default=1
+        ),
+        OpenApiParameter(
+            name='page_size',
+            type= {"type": "integer", "maximum": 100},
+            location=OpenApiParameter.QUERY,
+            description='Number of results per page (max 100)',
+            required=False,
+            default=10,
+        )
+    ]
+)
 class SimulationListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
-    serializer_class = SimulationStatusSerializer
+    serializer_class = SimulationStatusSerializerV1
 
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SimulationFilter
@@ -206,6 +338,9 @@ class SimulationListView(ListAPIView):
     pagination_class = SimulationPagination
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return SimulationRun.objects.none()
+
         user = self.request.user
 
         if user.is_staff:

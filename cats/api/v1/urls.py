@@ -1,5 +1,8 @@
 from django.urls import path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from .views import (
+    CustomTokenObtainPairViewV1,
+    CustomTokenRefreshViewV1,
     SimulationCancelView,
     SimulationDeleteView,
     SimulationDetailView,
@@ -9,7 +12,12 @@ from .views import (
     SimulationStartView,
 )
 
+
 urlpatterns = [
+    path('schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('token/', CustomTokenObtainPairViewV1.as_view(), name='v1-token-obtain-pair'),
+    path('token/refresh/', CustomTokenRefreshViewV1.as_view(), name='v1-token-refresh'),
     path(
         "simulations/start/", SimulationStartView.as_view(), name="v1-simulation-start"
     ),

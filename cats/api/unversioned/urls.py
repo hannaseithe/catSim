@@ -1,5 +1,7 @@
 from django.urls import path
 from .views import (
+    CustomTokenObtainPairView,
+    CustomTokenRefreshView,
     SimulationDetailView,
     SimulationErrorView,
     SimulationListView,
@@ -8,6 +10,8 @@ from .views import (
 )
 
 urlpatterns = [
+    path('token/', CustomTokenObtainPairView.as_view(), name='token-obtain-pair'),
+    path('token/refresh/', CustomTokenRefreshView.as_view(), name='token-refresh'),
     path(
         "simulations/start/", SimulationStartView.as_view(), name="simulation-start"
     ),
