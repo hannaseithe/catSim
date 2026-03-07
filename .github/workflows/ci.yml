@@ -7,6 +7,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
     env:
       SECRET_KEY: "super-secret-key-for-ci"
 
