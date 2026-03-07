@@ -1,6 +1,7 @@
 from django_filters import rest_framework as filters
 from django.utils.dateparse import parse_datetime, parse_date
 from django.utils.timezone import make_aware
+from django.core.validators import MaxValueValidator, MinValueValidator
 import datetime
 
 from cats.models import SimulationRun
@@ -36,18 +37,18 @@ class DateOrDateTimeFilter(filters.IsoDateTimeFilter):
 
 class SimulationFilter(filters.FilterSet):
     status = filters.CharFilter(field_name="status")
-    user = filters.CharFilter(field_name="user")
+    user = filters.NumberFilter(field_name="user",validators=[MinValueValidator(1), MaxValueValidator(1e18)])
     created_at_min = DateOrDateTimeFilter(field_name="created_at", lookup_expr="gte")
     created_at_max = DateOrDateTimeFilter(field_name="created_at", lookup_expr="lte")
-    iterations = filters.NumberFilter(field_name="iterations")
-    iterations_min = filters.NumberFilter(field_name="iterations", lookup_expr="gte")
-    iterations_max = filters.NumberFilter(field_name="iterations", lookup_expr="lte")
-    cat_amount = filters.NumberFilter(field_name="cat_amount")
-    cat_amount_min = filters.NumberFilter(field_name="cat_amount", lookup_expr="gte")
-    cat_amount_max = filters.NumberFilter(field_name="cat_amount", lookup_expr="lte")
-    node_amount = filters.NumberFilter(field_name="node_amount")
-    node_amount_min = filters.NumberFilter(field_name="node_amount", lookup_expr="gte")
-    node_amount_max = filters.NumberFilter(field_name="node_amount", lookup_expr="lte")
+    iterations = filters.NumberFilter(field_name="iterations", validators=[MinValueValidator(1)])
+    iterations_min = filters.NumberFilter(field_name="iterations", lookup_expr="gte", validators=[MinValueValidator(1)])
+    iterations_max = filters.NumberFilter(field_name="iterations", lookup_expr="lte", validators=[MinValueValidator(1)])
+    cat_amount = filters.NumberFilter(field_name="cat_amount", validators=[MinValueValidator(1)])
+    cat_amount_min = filters.NumberFilter(field_name="cat_amount", lookup_expr="gte", validators=[MinValueValidator(1)])
+    cat_amount_max = filters.NumberFilter(field_name="cat_amount", lookup_expr="lte", validators=[MinValueValidator(1)])
+    node_amount = filters.NumberFilter(field_name="node_amount", validators=[MinValueValidator(1)])
+    node_amount_min = filters.NumberFilter(field_name="node_amount", lookup_expr="gte", validators=[MinValueValidator(1)])
+    node_amount_max = filters.NumberFilter(field_name="node_amount", lookup_expr="lte", validators=[MinValueValidator(1)])
 
     class Meta:
         model = SimulationRun

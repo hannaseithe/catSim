@@ -238,8 +238,6 @@ def test_simulation_cancel(mock_async_result, create_user, auth_client_with_refr
         url_cancel
     )
 
-    print(response_cancel)
-
     assert response_cancel.status_code == 200
     assert response_cancel.data["id"] == run.id
     assert response_cancel.data["detail"] == "The SimulationRun has been canceled."
@@ -271,8 +269,6 @@ def test_simulation_cancel_finished(mock_async_result, create_user, auth_client_
     response_cancel = auth_client.post(
         url_cancel
     )
-
-    print(response_cancel)
 
     assert response_cancel.status_code == 409
     assert response_cancel.data["id"] == run.id

@@ -192,13 +192,15 @@ REST_FRAMEWORK = {
     'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.URLPathVersioning',
     'DEFAULT_VERSION': 'v1',
     'ALLOWED_VERSIONS': ['v1'],
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_SCHEMA_CLASS': 'cats.api.schema.AuthenticatedAutoSchema',
 }
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'CatSim API',
     'VERSION': '1.0.0',
     'DESCRIPTION': 'An API to run simulations of cat populations',
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SERVE_AUTHENTICATION": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
 }
 
 AUTH_USER_MODEL = "accounts.CustomUser"

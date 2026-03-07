@@ -3,6 +3,7 @@
 .env
 .env_forproduction
 .coverage
+.hypothesis
 /htmlcov
 
 __pycache__/

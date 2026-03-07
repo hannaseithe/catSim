@@ -5,23 +5,36 @@ from django.db.models import F, IntegerField
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    OpenApiParameter,
+    OpenApiRequest,
+)
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import serializers, status
+from rest_framework import status
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
 
 from cats.api.v1.filters import SimulationFilter
 from cats.api.paginations import SimulationPagination
 from cats.api.permissions import IsOwnerOrAdmin
 from cats.api.v1.serializers import (
+    LoginErrorSerializer,
     SimulationCreateSerializerV1,
     SimulationErrorSerializerV1,
     SimulationResultSerializerV1,
     SimulationStatusSerializerV1,
+    TokenRefreshRequestSerializer,
+    TokenRefreshResponseSerializer,
+    TokenRequestSerializer,
+    TokenResponseSerializer,
 )
 from cats.models import SimulationResults, SimulationRun
 from cats.tasks import run_simulation
@@ -31,36 +44,61 @@ logger = logging.getLogger(__name__)
 NOT_FAILED_RESPONSE = {"detail": "Simulation has not failed"}
 NOT_COMPLETED_RESPONSE = {"detail": "Simulation has not completed"}
 
-class TokenRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField()
-
-
-class TokenResponseSerializer(serializers.Serializer):
-    access = serializers.CharField()
-    refresh = serializers.CharField()
-
-class TokenRefreshRequestSerializer(serializers.Serializer):
-    access = serializers.CharField()
-
-class TokenRefreshResponseSerializer(serializers.Serializer):
-    refresh = serializers.CharField()
 
 @extend_schema(
     request=TokenRequestSerializer,
-    responses=TokenResponseSerializer,
+    responses={
+        200: OpenApiResponse(
+            response=TokenResponseSerializer,
+            description="Access and Refresh Token for authorization",
+        ),
+        400: OpenApiResponse(
+            response=LoginErrorSerializer,
+            description="Validation error or invalid credentials",
+        ),
+    },
 )
 class CustomTokenObtainPairViewV1(TokenObtainPairView):
     pass
 
+
 @extend_schema(
-    request=TokenRefreshRequestSerializer,
-    responses=TokenRefreshResponseSerializer,
+    description="This request allows a user to obtain a new acces token by passing in their refresh token",
+    request=OpenApiRequest(
+        examples=[
+            OpenApiExample(
+                name="Valid Refresh Request",
+                value={"refresh": "refresh_token"},
+                description="Accepts an refresh token that had been provided before through successful login",
+            )
+        ],
+        request=TokenRefreshRequestSerializer,
+    ),
+    responses={
+        200: OpenApiResponse(
+            response=TokenRefreshResponseSerializer,
+            description="New access token for Refreshed Session",
+        ),
+        400: OpenApiResponse(
+            response=LoginErrorSerializer,
+            description="Request is malformed or invalid",
+        ),
+        401: OpenApiResponse(
+            response=LoginErrorSerializer,
+            description="Refresh token is invalid",
+        ),
+    },
 )
 class CustomTokenRefreshViewV1(TokenRefreshView):
     pass
 
 
+@extend_schema(
+    responses={
+        200: OpenApiResponse(description="Simulation already exists"),
+        201: OpenApiResponse(description="Simulation created"),
+    }
+)
 class SimulationStartView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationCreateSerializerV1
@@ -68,8 +106,6 @@ class SimulationStartView(APIView):
     def post(self, request):
         serializer = SimulationCreateSerializerV1(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        print(serializer.validated_data)
 
         uuid = serializer.validated_data["uuid"]
 
@@ -101,6 +137,7 @@ class SimulationStartView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
 @extend_schema(
     request=None,
     responses={
@@ -109,7 +146,10 @@ class SimulationStartView(APIView):
             "properties": {
                 "id": {"type": "string"},
                 "uuid": {"type": "string"},
-                "detail": {"type": "string", "example": "The SimulationRun has been canceled."},
+                "detail": {
+                    "type": "string",
+                    "example": "The SimulationRun has been canceled.",
+                },
             },
         },
         409: {
@@ -129,25 +169,26 @@ class SimulationStartView(APIView):
                 "detail": {"type": "string", "example": "No identifier provided."},
             },
         },
-        404: {
-            "type": "object",
-            "properties": {
-                "detail": {"type": "string"},
-            },
+        (404, "text/html"): {
+            "description": "Not Found - returns HTML page",
+        },
+        (404, "application/json"): {
+            "description": "Not Found - returns HTML page",
         },
     },
 )
 class SimulationCancelView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    authentication_classes = [JWTAuthentication]
 
     def post(self, request, simulation_id=None, simulation_uuid=None):
-        if simulation_id:
+        if simulation_id is not None:
             run = get_object_or_404(SimulationRun, id=simulation_id)
-        elif simulation_uuid:
+        elif simulation_uuid is not None:
             run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
         else:
             return Response({"detail": "No identifier provided."}, status=400)
-        
+
         self.check_object_permissions(request, run)
 
         identifiers = {"id": run.id, "uuid": run.uuid}
@@ -167,7 +208,8 @@ class SimulationCancelView(APIView):
             {**identifiers, "detail": "The SimulationRun has been canceled."},
             status=200,
         )
-    
+
+
 @extend_schema(
     request=None,
     responses={
@@ -176,7 +218,10 @@ class SimulationCancelView(APIView):
             "properties": {
                 "id": {"type": "string"},
                 "uuid": {"type": "string"},
-                "detail": {"type": "string", "example": "The SimulationRun has been deleted."},
+                "detail": {
+                    "type": "string",
+                    "example": "The SimulationRun has been deleted.",
+                },
             },
         },
         409: {
@@ -196,11 +241,11 @@ class SimulationCancelView(APIView):
                 "detail": {"type": "string", "example": "No identifier provided."},
             },
         },
-        404: {
-            "type": "object",
-            "properties": {
-                "detail": {"type": "string"},
-            },
+        (404, "text/html"): {
+            "description": "Not Found - returns HTML page",
+        },
+        (404, "application/json"): {
+            "description": "Not Found - returns HTML page",
         },
     },
 )
@@ -208,14 +253,13 @@ class SimulationDeleteView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
     def delete(self, request, simulation_id=None, simulation_uuid=None):
-        if simulation_id:
+        if simulation_id is not None:
             run = get_object_or_404(SimulationRun, id=simulation_id)
-        elif simulation_uuid:
+        elif simulation_uuid is not None:
             run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
         else:
             return Response({"detail": "No identifier provided."}, status=400)
 
-        
         self.check_object_permissions(request, run)
 
         identifiers = {"id": run.id, "uuid": run.uuid}
@@ -224,7 +268,6 @@ class SimulationDeleteView(APIView):
             SimulationRun.Status.FINISHED,
             SimulationRun.Status.FAILED,
         ):
-            print(f"The status of the simulation: {run.status}")
             return Response(
                 {
                     **identifiers,
@@ -239,14 +282,26 @@ class SimulationDeleteView(APIView):
         )
 
 
+@extend_schema(
+    responses={
+        200: SimulationResultSerializerV1,
+        400: OpenApiResponse(description="No identifier provided."),
+        (404, "text/html"): {
+            "description": "Not Found - returns HTML page",
+        },
+        (404, "application/json"): {
+            "description": "Not Found - returns HTML page",
+        },
+    }
+)
 class SimulationDetailView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationStatusSerializerV1
 
     def get(self, request, id=None, simulation_uuid=None):
-        if id:
+        if id is not None:
             run = get_object_or_404(SimulationRun, id=id)
-        elif simulation_uuid:
+        elif simulation_uuid is not None:
             run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
         else:
             return Response({"detail": "No identifier provided."}, status=400)
@@ -256,14 +311,27 @@ class SimulationDetailView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema(
+    responses={
+        200: SimulationResultSerializerV1,
+        400: OpenApiResponse(description="No identifier provided."),
+        409: OpenApiResponse(description="Simulation has not failed."),
+        (404, "text/html"): {
+            "description": "Not Found - returns HTML page",
+        },
+        (404, "application/json"): {
+            "description": "Not Found - returns HTML page",
+        },
+    }
+)
 class SimulationErrorView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationErrorSerializerV1
 
     def get(self, request, id=None, simulation_uuid=None):
-        if id:
+        if id is not None:
             run = get_object_or_404(SimulationRun, id=id)
-        elif simulation_uuid:
+        elif simulation_uuid is not None:
             run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
         else:
             return Response({"detail": "No identifier provided."}, status=400)
@@ -274,17 +342,30 @@ class SimulationErrorView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         serializer = SimulationErrorSerializerV1(run)
-        return Response(serializer.data)
+        return Response(serializer.data, status=200)
 
 
+@extend_schema(
+    responses={
+        200: SimulationResultSerializerV1,
+        400: OpenApiResponse(description="No identifier provided."),
+        409: OpenApiResponse(description="Simulation has not completed."),
+        (404, "text/html"): {
+            "description": "Not Found - returns HTML page",
+        },
+        (404, "application/json"): {
+            "description": "Not Found - returns HTML page",
+        },
+    }
+)
 class SimulationResultView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = SimulationResultSerializerV1
 
     def get(self, request, id=None, simulation_uuid=None):
-        if id:
+        if id is not None:
             run = get_object_or_404(SimulationRun, id=id)
-        elif simulation_uuid:
+        elif simulation_uuid is not None:
             run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
         else:
             return Response({"detail": "No identifier provided."}, status=400)
@@ -296,35 +377,90 @@ class SimulationResultView(APIView):
             )
         result = get_object_or_404(SimulationResults, run__id=id)
         serializer = SimulationResultSerializerV1(result)
-        return Response(serializer.data)
+        return Response(serializer.data, status=200)
+
 
 @extend_schema(
     parameters=[
         OpenApiParameter(
-            name='ordering',
+            name="iterations", type={"type": "number", "maximum": 1e50, "minimum": 1}
+        ),
+        OpenApiParameter(
+            name="iterations_min",
+            type={"type": "number", "maximum": 1e50, "minimum": 1},
+        ),
+        OpenApiParameter(
+            name="iterations_max",
+            type={"type": "number", "maximum": 1e50, "minimum": 1},
+        ),
+        OpenApiParameter(
+            name="cat_amount", type={"type": "number", "maximum": 1e50, "minimum": 1}
+        ),
+        OpenApiParameter(
+            name="cat_amount_min",
+            type={"type": "number", "maximum": 1e50, "minimum": 1},
+        ),
+        OpenApiParameter(
+            name="cat_amount_max",
+            type={"type": "number", "maximum": 1e50, "minimum": 1},
+        ),
+        OpenApiParameter(
+            name="node_amount", type={"type": "number", "maximum": 1e50, "minimum": 1}
+        ),
+        OpenApiParameter(
+            name="node_amount_min",
+            type={"type": "number", "maximum": 1e50, "minimum": 1},
+        ),
+        OpenApiParameter(
+            name="node_amount_max",
+            type={"type": "number", "maximum": 1e50, "minimum": 1},
+        ),
+        OpenApiParameter(
+            name="user", type={"type": "number", "maximum": 1e18, "minimum": 1}
+        ),
+        OpenApiParameter(
+            name="ordering",
             type=str,
             location=OpenApiParameter.QUERY,
             description='Field to order by. Prefix with "-" for descending.',
-            enum=['created_at', '-created_at', 'iterations', '-iterations', 'cat_amount', '-cat_amount', 'node_amount', '-node_amount'],
-            required=False
+            enum=[
+                "created_at",
+                "-created_at",
+                "iterations",
+                "-iterations",
+                "cat_amount",
+                "-cat_amount",
+                "node_amount",
+                "-node_amount",
+            ],
+            required=False,
         ),
         OpenApiParameter(
-            name='page',
+            name="page",
             type=int,
             location=OpenApiParameter.QUERY,
-            description='Page number within the paginated result set.',
+            description="Page number within the paginated result set.",
             required=False,
-            default=1
+            default=1,
         ),
         OpenApiParameter(
-            name='page_size',
-            type= {"type": "integer", "maximum": 100},
+            name="page_size",
+            type={"type": "integer", "maximum": 100},
             location=OpenApiParameter.QUERY,
-            description='Number of results per page (max 100)',
+            description="Number of results per page (max 100)",
             required=False,
             default=10,
-        )
-    ]
+        ),
+    ],
+    responses={
+        200: {"description": "Returns a list of simulations"},
+        (404, "text/html"): {
+            "description": "Not Found - returns HTML page",
+        },
+        (404, "application/json"): {
+            "description": "Not Found - returns HTML page",
+        },
+    },
 )
 class SimulationListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
