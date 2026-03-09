@@ -1,7 +1,15 @@
 # Cat Simulation Project
 
-I simulate the relationships of cats developing over time. Currently this serves mainly the purpose of practicing headless Django with a fun little simulation behind it
+I simulate the relationships of cats developing over time. Currently this serves mainly the purpose of practicing headless Django and Django REST Framework with a fun little simulation behind it
 
+
+#### v2.2.0:
+- Added Versioning to API: Version 1 of API to be found under `/api/v1/` and old API has been deprecated
+- Guaranteed Idempotency for the `/api/simulations/start`endpoint in the sense that a single simulation run can only be started once
+- Added new `cancel` and `delete` endpoints
+- Added **OpenAPI schema definition** and swaggerUI documentation
+- Added **Schemathesis tests** of the v1 API based on the OpenAPI definition
+- Created Postman collection based on OpenAPI schema: https://www.postman.com/hanna-seithe/workspace/catsim/collection/1998245-4f7997af-b044-4843-910f-4a0574acdef7?action=share&source=copy-link&creator=1998245
 
  #### [v2.1.0](https://github.com/hannaseithe/catSim/releases/tag/v2.1.0):
 Added filtering, ordering and pagination to  `/api/simulations/`:`GET` endpoint
