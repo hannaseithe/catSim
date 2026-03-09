@@ -18,23 +18,26 @@ from rest_framework import status
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 
+from cats.api.serializers import DetailSerializer
 from cats.api.v1.filters import SimulationFilter
 from cats.api.paginations import SimulationPagination
 from cats.api.permissions import IsOwnerOrAdmin
 from cats.api.v1.serializers import (
-    LoginErrorSerializer,
+    LoginErrorSerializerV1,
+    SimulationActionResponseSerializerV1,
+    SimulationCreateResponseSerializerV1,
     SimulationCreateSerializerV1,
     SimulationErrorSerializerV1,
+    SimulationExistsResponseSerializerV1,
     SimulationResultSerializerV1,
     SimulationStatusSerializerV1,
-    TokenRefreshRequestSerializer,
-    TokenRefreshResponseSerializer,
-    TokenRequestSerializer,
-    TokenResponseSerializer,
+    TokenRefreshRequestSerializerV1,
+    TokenRefreshResponseSerializerV1,
+    TokenRequestSerializerV1,
+    TokenResponseSerializerV1,
 )
 from cats.models import SimulationResults, SimulationRun
 from cats.tasks import run_simulation
@@ -46,14 +49,14 @@ NOT_COMPLETED_RESPONSE = {"detail": "Simulation has not completed"}
 
 
 @extend_schema(
-    request=TokenRequestSerializer,
+    request=TokenRequestSerializerV1,
     responses={
         200: OpenApiResponse(
-            response=TokenResponseSerializer,
+            response=TokenResponseSerializerV1,
             description="Access and Refresh Token for authorization",
         ),
         400: OpenApiResponse(
-            response=LoginErrorSerializer,
+            response=LoginErrorSerializerV1,
             description="Validation error or invalid credentials",
         ),
     },
@@ -72,19 +75,19 @@ class CustomTokenObtainPairViewV1(TokenObtainPairView):
                 description="Accepts an refresh token that had been provided before through successful login",
             )
         ],
-        request=TokenRefreshRequestSerializer,
+        request=TokenRefreshRequestSerializerV1,
     ),
     responses={
         200: OpenApiResponse(
-            response=TokenRefreshResponseSerializer,
+            response=TokenRefreshResponseSerializerV1,
             description="New access token for Refreshed Session",
         ),
         400: OpenApiResponse(
-            response=LoginErrorSerializer,
+            response=LoginErrorSerializerV1,
             description="Request is malformed or invalid",
         ),
         401: OpenApiResponse(
-            response=LoginErrorSerializer,
+            response=LoginErrorSerializerV1,
             description="Refresh token is invalid",
         ),
     },
@@ -95,8 +98,8 @@ class CustomTokenRefreshViewV1(TokenRefreshView):
 
 @extend_schema(
     responses={
-        200: OpenApiResponse(description="Simulation already exists"),
-        201: OpenApiResponse(description="Simulation created"),
+        200: OpenApiResponse(response=SimulationExistsResponseSerializerV1, description="Simulation already exists"),
+        201: OpenApiResponse(response=SimulationCreateResponseSerializerV1, description="Simulation created and queued for run"),
     }
 )
 class SimulationStartView(APIView):
@@ -141,45 +144,12 @@ class SimulationStartView(APIView):
 @extend_schema(
     request=None,
     responses={
-        200: {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "uuid": {"type": "string"},
-                "detail": {
-                    "type": "string",
-                    "example": "The SimulationRun has been canceled.",
-                },
-            },
-        },
-        409: {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "uuid": {"type": "string"},
-                "detail": {
-                    "type": "string",
-                    "example": "The SimulationRun is not pending nor running, and can therefore not be canceled.",
-                },
-            },
-        },
-        400: {
-            "type": "object",
-            "properties": {
-                "detail": {"type": "string", "example": "No identifier provided."},
-            },
-        },
-        (404, "text/html"): {
-            "description": "Not Found - returns HTML page",
-        },
-        (404, "application/json"): {
-            "description": "Not Found - returns HTML page",
-        },
+        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been canceled."),
+        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not pending nor running, and can therefore not be canceled."),
     },
 )
 class SimulationCancelView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
-    authentication_classes = [JWTAuthentication]
 
     def post(self, request, simulation_id=None, simulation_uuid=None):
         if simulation_id is not None:
@@ -213,40 +183,8 @@ class SimulationCancelView(APIView):
 @extend_schema(
     request=None,
     responses={
-        200: {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "uuid": {"type": "string"},
-                "detail": {
-                    "type": "string",
-                    "example": "The SimulationRun has been deleted.",
-                },
-            },
-        },
-        409: {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "uuid": {"type": "string"},
-                "detail": {
-                    "type": "string",
-                    "example": "The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first.",
-                },
-            },
-        },
-        400: {
-            "type": "object",
-            "properties": {
-                "detail": {"type": "string", "example": "No identifier provided."},
-            },
-        },
-        (404, "text/html"): {
-            "description": "Not Found - returns HTML page",
-        },
-        (404, "application/json"): {
-            "description": "Not Found - returns HTML page",
-        },
+        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been deleted."),
+        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first."),
     },
 )
 class SimulationDeleteView(APIView):
@@ -284,14 +222,7 @@ class SimulationDeleteView(APIView):
 
 @extend_schema(
     responses={
-        200: SimulationResultSerializerV1,
-        400: OpenApiResponse(description="No identifier provided."),
-        (404, "text/html"): {
-            "description": "Not Found - returns HTML page",
-        },
-        (404, "application/json"): {
-            "description": "Not Found - returns HTML page",
-        },
+        200: OpenApiResponse(response=SimulationStatusSerializerV1, description="Detailed Information on a simulation run"),
     }
 )
 class SimulationDetailView(APIView):
@@ -313,15 +244,8 @@ class SimulationDetailView(APIView):
 
 @extend_schema(
     responses={
-        200: SimulationResultSerializerV1,
-        400: OpenApiResponse(description="No identifier provided."),
-        409: OpenApiResponse(description="Simulation has not failed."),
-        (404, "text/html"): {
-            "description": "Not Found - returns HTML page",
-        },
-        (404, "application/json"): {
-            "description": "Not Found - returns HTML page",
-        },
+        200: OpenApiResponse(response=SimulationErrorSerializerV1, description="Error information if the simulation run has failed"),
+        409: OpenApiResponse(response=DetailSerializer, description="Simulation has not failed."),
     }
 )
 class SimulationErrorView(APIView):
@@ -347,15 +271,8 @@ class SimulationErrorView(APIView):
 
 @extend_schema(
     responses={
-        200: SimulationResultSerializerV1,
-        400: OpenApiResponse(description="No identifier provided."),
-        409: OpenApiResponse(description="Simulation has not completed."),
-        (404, "text/html"): {
-            "description": "Not Found - returns HTML page",
-        },
-        (404, "application/json"): {
-            "description": "Not Found - returns HTML page",
-        },
+        200: OpenApiResponse(response=SimulationResultSerializerV1, description="The results of a completed simulation run"),
+        409: OpenApiResponse(response=DetailSerializer, description="Simulation has not completed."),
     }
 )
 class SimulationResultView(APIView):
@@ -375,7 +292,7 @@ class SimulationResultView(APIView):
                 NOT_COMPLETED_RESPONSE,
                 status=status.HTTP_409_CONFLICT,
             )
-        result = get_object_or_404(SimulationResults, run__id=id)
+        result = get_object_or_404(SimulationResults, run__id=run.id)
         serializer = SimulationResultSerializerV1(result)
         return Response(serializer.data, status=200)
 
@@ -453,13 +370,7 @@ class SimulationResultView(APIView):
         ),
     ],
     responses={
-        200: {"description": "Returns a list of simulations"},
-        (404, "text/html"): {
-            "description": "Not Found - returns HTML page",
-        },
-        (404, "application/json"): {
-            "description": "Not Found - returns HTML page",
-        },
+        200: OpenApiResponse(response=SimulationStatusSerializerV1,description= "Returns a list of simulations"),
     },
 )
 class SimulationListView(ListAPIView):

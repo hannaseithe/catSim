@@ -201,6 +201,8 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'An API to run simulations of cat populations',
     "COMPONENT_SPLIT_REQUEST": True,
     "SERVE_AUTHENTICATION": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
+    "SERVE_INCLUDE_SCHEMA": False,
+    "PREPROCESSING_HOOKS": ["cats.api.schema.filter_v1_endpoints"],
 }
 
 AUTH_USER_MODEL = "accounts.CustomUser"

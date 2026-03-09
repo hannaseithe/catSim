@@ -100,22 +100,22 @@ class SimulationResultSerializerV1(serializers.ModelSerializer):
         model = SimulationResults
         fields = ["id", "run_id", "metrics"]
 
-class TokenRequestSerializer(serializers.Serializer):
+class TokenRequestSerializerV1(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField()
 
 
-class TokenResponseSerializer(serializers.Serializer):
+class TokenResponseSerializerV1(serializers.Serializer):
     access = serializers.CharField()
     refresh = serializers.CharField()
 
-class TokenRefreshRequestSerializer(serializers.Serializer):
+class TokenRefreshRequestSerializerV1(serializers.Serializer):
     refresh = serializers.CharField()
 
-class TokenRefreshResponseSerializer(serializers.Serializer):
-    refresh = serializers.CharField()
+class TokenRefreshResponseSerializerV1(serializers.Serializer):
+    access = serializers.CharField()
 
-class LoginErrorSerializer(serializers.Serializer):
+class LoginErrorSerializerV1(serializers.Serializer):
     detail = serializers.CharField(required=False)
     email = serializers.ListField(
         child=serializers.CharField(),
@@ -126,3 +126,18 @@ class LoginErrorSerializer(serializers.Serializer):
         required=False,
     )
 
+class SimulationActionResponseSerializerV1(serializers.Serializer):
+    id = serializers.IntegerField()
+    uuid = serializers.UUIDField()
+    detail = serializers.CharField()
+
+class SimulationCreateResponseSerializerV1(serializers.Serializer):
+    id = serializers.IntegerField()                                                                                                                                                         
+    uuid = serializers.UUIDField()                                                                                                                                                          
+    status = serializers.ChoiceField(choices=SimulationRun.Status.choices)       
+
+class SimulationExistsResponseSerializerV1(serializers.Serializer):
+    id = serializers.IntegerField()                                                                                                                                                         
+    uuid = serializers.UUIDField()                                                                                                                                                          
+    status = serializers.ChoiceField(choices=SimulationRun.Status.choices)       
+    message = serializers.CharField()

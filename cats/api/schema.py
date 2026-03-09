@@ -1,4 +1,6 @@
 from drf_spectacular.openapi import AutoSchema
+from rest_framework.permissions import IsAuthenticated
+
 
 
 class AuthenticatedAutoSchema(AutoSchema):
@@ -10,19 +12,31 @@ class AuthenticatedAutoSchema(AutoSchema):
             if getattr(self.view, "permission_classes", None):
                 responses.setdefault(
                     "400",
-                    {
-                        "description": "Invalid request data"
-                    },
+                    {"description": "Invalid Request Data"},
                 )
                 responses.setdefault(
-                    "401",
+                    "404",
                     {
-                        "description": "Authentication credentials were not provided or invalid."
-                    },
+                        "description": "Resource not found"
+                    }
                 )
-                responses.setdefault(
-                    "403",
-                    {"description": "Permission denied."},
-                )
+                if IsAuthenticated in getattr(self.view, "permission_classes", []):
+                    responses.setdefault(
+                        "401",
+                        {
+                            "description": "Authentication credentials were not provided or invalid."
+                        },
+                    )
+                    responses.setdefault(
+                        "403",
+                        {"description": "Permission denied."},
+                    )
 
         return responses
+    
+def filter_v1_endpoints(endpoints, **kwargs):                                                                                                                                               
+    return [                                                                                                                                                                                
+        (path, path_regex, method, callback)                                                                                                                                                
+        for path, path_regex, method, callback in endpoints                                                                                                                                 
+        if path.startswith("/api/v1/")                                                                                                                                                      
+    ] 
