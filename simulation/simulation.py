@@ -90,15 +90,12 @@ class Simulation:
                 result.append(edge.other_node(node_id))
         return result
 
-    def what_node_is_cat_at(self, cat):
-        cat.current_node
-
     def is_home_of_enemy(self, node_id, cat_id):
         home_cats = [cat.traits.id for cat in self.cats if cat.traits.home == node_id]
         for cat in home_cats:
             if cat == cat_id:
                 return False
-            if self.get_relationship(cat, cat_id).value > 0:
+            if self.get_relationship(cat, cat_id).value > 1e-9:
                 return True
         return False
 
@@ -107,7 +104,7 @@ class Simulation:
         for cat in home_cats:
             if cat == cat_id:
                 return False
-            if self.get_relationship(cat, cat_id).value >= 0:
+            if self.get_relationship(cat, cat_id).value >= -1e-9:
                 return True
         return False
 
@@ -142,14 +139,14 @@ class Simulation:
     def get_friends(self, cat1):
         result = []
         for rel in self.relationships.values():
-            if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value < 0:
+            if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value < -1e-9:
                 result.append(rel.other_cat(cat1))
         return result
 
     def get_enemies(self, cat1):
         result = []
         for rel in self.relationships.values():
-            if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value > 0:
+            if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value > 1e-9:
                 result.append(rel.other_cat(cat1))
         return result
 
@@ -335,7 +332,7 @@ class Simulation:
             rel.stats.absolute_delta += 0.05
             self.stats.total_number_interactions += 1
             rel.stats.interacted = True
-            if rel.value == 0:
+            if abs(rel.value) < 1e-9:
                 rel.stats.number_of_sign_flips += 1
             if interaction_value > 0:
                 cat1.stats.fights += 1
@@ -363,7 +360,7 @@ class Simulation:
     def calculate_metrics(self):
         G = nx.Graph()
 
-        G.add_nodes_from(range(70))
+        G.add_nodes_from(range(self.params.node_amount))
         for rel in self.relationships.values():
             rel.metrics = RelationshipMetrics(
                 stability=1 / (1 + rel.stats.absolute_delta),
@@ -372,7 +369,7 @@ class Simulation:
                 max_value=rel.stats.max_value,
                 number_of_sign_flips=rel.stats.number_of_sign_flips,
             )
-            if rel.value < 0:
+            if abs(rel.value) < -1e-9:
                 G.add_edge(rel.traits.cat1, rel.traits.cat2)
 
         cliques = [clique for clique in list(nx.find_cliques(G)) if len(clique) > 2]
