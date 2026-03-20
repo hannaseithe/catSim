@@ -8,7 +8,9 @@ from .views import (
     SimulationDetailView,
     SimulationErrorView,
     SimulationListView,
+    SimulationPauseView,
     SimulationResultView,
+    SimulationResumeView,
     SimulationStartView,
 )
 
@@ -30,6 +32,26 @@ urlpatterns = [
         "simulations/<uuid:simulation_uuid>/cancel/",
         SimulationCancelView.as_view(),
         name="v1-simulation-cancel-uuid",
+    ),
+    path(
+        "simulations/<int:simulation_id>/pause/",
+        SimulationPauseView.as_view(),
+        name="v1-simulation-pause-id",
+    ),
+    path(
+        "simulations/<uuid:simulation_uuid>/pause/",
+        SimulationPauseView.as_view(),
+        name="v1-simulation-pause-uuid",
+    ),
+      path(
+        "simulations/<int:simulation_id>/resume/",
+        SimulationResumeView.as_view(),
+        name="v1-simulation-resume-id",
+    ),
+    path(
+        "simulations/<uuid:simulation_uuid>/resume/",
+        SimulationResumeView.as_view(),
+        name="v1-simulation-resume-uuid",
     ),
     path(
         "simulations/<int:simulation_id>/delete/",

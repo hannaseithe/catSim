@@ -179,6 +179,83 @@ class SimulationCancelView(APIView):
             status=200,
         )
 
+@extend_schema(
+    request=None,
+    responses={
+        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been queued to be paused."),
+        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not running, and can therefore not be paused."),
+    },
+)
+class SimulationPauseView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
+    def post(self, request, simulation_id=None, simulation_uuid=None):
+        if simulation_id is not None:
+            run = get_object_or_404(SimulationRun, id=simulation_id)
+        elif simulation_uuid is not None:
+            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
+        else:
+            return Response({"detail": "No identifier provided."}, status=400)
+
+        self.check_object_permissions(request, run)
+
+        identifiers = {"id": run.id, "uuid": run.uuid}
+        if run.status not in (
+            SimulationRun.Status.RUNNING,
+        ):
+            return Response(
+                {
+                    **identifiers,
+                    "detail": "The SimulationRun is not running, and can therefore not be paused.",
+                },
+                status=409,
+            )
+        run.pause_requested = True
+        run.save(update_fields=['pause_requested'])
+        return Response(
+            {**identifiers, "detail": "The SimulationRun has been queued to be paused."},
+            status=200,
+        )
+    
+@extend_schema(
+    request=None,
+    responses={
+        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been queued to be resumed."),
+        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not paused or canceled, and can therefore not be resumed."),
+    },
+)
+class SimulationResumeView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
+    def post(self, request, simulation_id=None, simulation_uuid=None):
+        if simulation_id is not None:
+            run = get_object_or_404(SimulationRun, id=simulation_id)
+        elif simulation_uuid is not None:
+            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
+        else:
+            return Response({"detail": "No identifier provided."}, status=400)
+
+        self.check_object_permissions(request, run)
+
+        identifiers = {"id": run.id, "uuid": run.uuid}
+        if run.status not in (
+            SimulationRun.Status.PAUSED,
+            SimulationRun.Status.CANCELED,
+        ):
+            return Response(
+                {
+                    **identifiers,
+                    "detail": "The SimulationRun has not been paused or cancelled, and can therefore not be resumed.",
+                },
+                status=409,
+            )
+        task_result = run_simulation.delay(run.id, resume=True)
+        run.celery_task_id = task_result.id
+        run.save()
+        return Response(
+            {**identifiers, "detail": "The SimulationRun has been queued to be resumed."},
+            status=200,
+        )
 
 @extend_schema(
     request=None,

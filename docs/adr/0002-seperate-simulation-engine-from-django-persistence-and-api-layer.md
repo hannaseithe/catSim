@@ -13,7 +13,6 @@ We need to define how the simulation engine, persistence layer, and API layer in
 ## Decision Drivers
 
 As part of this practice project, I wanted a clean, production-level architecture with clear separation of concerns.  
-This design approach was suggested during a brainstorming session with GPT.
 
 ## Considered Options
 

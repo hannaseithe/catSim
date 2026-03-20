@@ -3,7 +3,8 @@ from simulation.metrics import extract_metrics
 
 def test_extract_metrics(sample_sim):
     sample_sim.generate_initial_state()
-    sample_sim.run()
+    for _ in sample_sim.run(): 
+        pass
     metrics = extract_metrics(sample_sim)
 
     keys = metrics.keys()

@@ -1,5 +1,8 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
+
+from simulation.utils import validate_dict
 
 
 @dataclass
@@ -23,6 +26,11 @@ class CatMetrics:
     exploration_index: float
     relationship_entropy: float
 
+    @classmethod
+    def from_dict(cls, data: dict) -> CatMetrics:
+        validate_dict(data, cls)
+        return CatMetrics(**data)
+
 
 @dataclass
 class RelationshipMetrics:
@@ -31,6 +39,11 @@ class RelationshipMetrics:
     min_value: float
     max_value: float
     number_of_sign_flips: int
+
+    @classmethod
+    def from_dict(cls, data: dict) -> RelationshipMetrics:
+        validate_dict(data, cls)
+        return RelationshipMetrics(**data)
 
 
 @dataclass(frozen=True)
@@ -41,6 +54,10 @@ class CatTraits:
     aggressive: float
     lazy: float
 
+    @classmethod
+    def from_dict(cls, data: dict) -> CatTraits:
+        validate_dict(data, cls)
+        return CatTraits(**data)
 
 @dataclass
 class CatStats:
@@ -57,18 +74,31 @@ class CatStats:
     interacted_with: set = field(default_factory=set)
     nodes_visited: set = field(default_factory=set)
 
+    @classmethod
+    def from_dict(cls, data: dict) -> CatStats:
+        validate_dict(data, cls)
+        return CatStats(
+            interacted_with=set(data['interacted_with']),
+            nodes_visited=set(data['nodes_visited']),
+            **{k:v for k,v in data.items() if k not in ('interacted_with', 'nodes_visited')}
+            )
 
+
+@dataclass(eq=False)
 class Cat:
-    def __init__(self, traits: CatTraits):
-        self.traits = traits
-        self.current_node = traits.home
-        self.target_node: Optional[int] = None
-        self.needs_to_run = False
-        self.time_at_current_node = 0
+    traits: CatTraits
+    current_node: Optional[int] = None
+    target_node: Optional[int] = None
+    needs_to_run:bool = False
+    time_at_current_node:int = 0
+    stats: CatStats = field(default_factory=CatStats)
+    metrics: Optional[CatMetrics] = None
 
-        self.stats: CatStats = CatStats()
-        self.stats.nodes_visited.add(traits.home)
-        self.metrics: Optional[CatMetrics] = None
+    def __post_init__(self):
+        if self.current_node is None:
+            self.current_node = self.traits.home
+        if len(self.stats.nodes_visited) == 0:
+            self.stats.nodes_visited.add(self.traits.home)
 
     def __str__(self):
         if self.current_node is not None:
@@ -81,6 +111,19 @@ class Cat:
             return f"{self.traits.name} at node #{self.current_node}"
         else:
             return f"{self.traits.name} moving to node #{self.target_node}"
+        
+    @classmethod
+    def from_dict(cls, data: dict) -> Cat:
+        validate_dict(data, cls)
+        return Cat(
+            traits=CatTraits.from_dict(data['traits']),
+            current_node=data['current_node'],
+            target_node=data['target_node'],
+            needs_to_run=data['needs_to_run'],
+            time_at_current_node=data['time_at_current_node'],
+            stats= CatStats.from_dict(data['stats']),
+            metrics= CatMetrics.from_dict(data['metrics']) if data['metrics'] is not None else None
+            )
 
     def leave(self, target_node):
         if self.current_node == target_node:
@@ -107,6 +150,11 @@ class Edge:
     node1: int
     node2: int
 
+    @classmethod
+    def from_dict(cls, data: dict) -> Edge:
+        validate_dict(data, cls)
+        return Edge(**data)
+
     def node_in_edge(self, node_id):
         return node_id == self.node1 or node_id == self.node2
 
@@ -119,12 +167,21 @@ class Node:
     id: int
     number_of_edges: int
 
+    @classmethod
+    def from_dict(cls, data: dict) -> Node:
+        validate_dict(data, cls)
+        return Node(**data)
 
 @dataclass(frozen=True)
 class RelationshipTraits:
     cat1: int
     cat2: int
 
+    @classmethod
+    def from_dict(cls, data: dict) -> RelationshipTraits:
+        validate_dict(data, cls)
+        return RelationshipTraits(**data)
+        
 
 @dataclass
 class RelationshipStats:
@@ -134,19 +191,39 @@ class RelationshipStats:
     number_of_sign_flips: int = 0
     interacted: bool = False
 
+    @classmethod
+    def from_dict(cls, data: dict) -> RelationshipStats:
+        validate_dict(data, cls)
+        return RelationshipStats(**data)
+        
 
+@dataclass
 class Relationship:
-    def __init__(self, traits: RelationshipTraits):
-        self.traits = traits
-        self.value = 0
-        self.stats = RelationshipStats()
-        self.metrics: Optional[RelationshipMetrics] = None
+    traits: RelationshipTraits
+    value: int = 0
+    stats: RelationshipStats = field(default_factory=RelationshipStats)
+    metrics: Optional[RelationshipMetrics] = None
 
     def __str__(self):
         return f"Relationship: Cat {self.traits.cat1} - Cat {self.traits.cat2}"
 
     def __repr__(self):
         return f"Relationship between Cat {self.traits.cat1} and Cat {self.traits.cat2} - value: {self.value}"
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> Relationship:
+        validate_dict(data, cls)
+        return Relationship(
+            traits=RelationshipTraits.from_dict(data['traits']),
+            value=data['value'],
+            stats= RelationshipStats.from_dict(data['stats']),
+            metrics= RelationshipMetrics.from_dict(data['metrics']) if data['metrics'] is not None else None
+            )
+
+    @staticmethod
+    def parse_key(key: str) -> tuple[int,int]:
+        a,b = key.split('-')
+        return int(a),int(b)
 
     def other_cat(self, cat1):
         return self.traits.cat1 if cat1 == self.traits.cat2 else self.traits.cat2

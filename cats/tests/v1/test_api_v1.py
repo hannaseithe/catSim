@@ -304,6 +304,105 @@ def test_simulation_delete(create_user, auth_client_with_refresh_v1):
 
     assert not SimulationRun.objects.filter(id=run.id).exists()
 
+@pytest.mark.django_db
+def test_simulation_pause(create_user, auth_client_with_refresh_v1):
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.RUNNING,
+        params=json.dumps({})
+    )
+
+    url = reverse("v1-simulation-pause-id", args=[run.id])
+    response = auth_client.post(
+        url
+    )
+
+    assert response.status_code == 200
+    assert response.data["id"] == run.id
+    assert response.data["detail"] == "The SimulationRun has been queued to be paused."
+
+    run.refresh_from_db()
+
+    assert run.pause_requested
+
+@pytest.mark.django_db
+def test_simulation_pause_fail(create_user, auth_client_with_refresh_v1):
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.FINISHED,
+        params=json.dumps({})
+    )
+
+    url = reverse("v1-simulation-pause-id", args=[run.id])
+    response = auth_client.post(
+        url
+    )
+
+    assert response.status_code == 409
+    assert response.data["id"] == run.id
+    assert response.data["detail"] == "The SimulationRun is not running, and can therefore not be paused."
+
+    run.refresh_from_db()
+
+    assert not run.pause_requested
+
+
+@pytest.mark.django_db
+@patch("cats.api.v1.views.run_simulation.delay")
+def test_simulation_resume(mock_delay,create_user, auth_client_with_refresh_v1):
+    mock_task = MagicMock()
+    mock_task.id = "fake-task-id-123"
+    mock_delay.return_value = mock_task
+
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.PAUSED,
+        params=json.dumps({})
+    )
+
+    url = reverse("v1-simulation-resume-id", args=[run.id])
+    response = auth_client.post(
+        url
+    )
+
+    assert response.status_code == 200
+    assert response.data["id"] == run.id
+    assert response.data["detail"] == "The SimulationRun has been queued to be resumed."
+
+    mock_delay.assert_called_once_with(run.id, resume=True)
+
+@pytest.mark.django_db
+def test_simulation_resume_fail(create_user, auth_client_with_refresh_v1):
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.RUNNING,
+        params=json.dumps({})
+    )
+
+    url = reverse("v1-simulation-resume-id", args=[run.id])
+    response = auth_client.post(
+        url
+    )
+
+    assert response.status_code == 409
+    assert response.data["id"] == run.id
+    assert response.data["detail"] == "The SimulationRun has not been paused or cancelled, and can therefore not be resumed."
 
 
 

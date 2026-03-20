@@ -1,4 +1,7 @@
-from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import asdict, dataclass, field
+import json
+import logging
 import math
 from typing import Optional
 from simulation.state import (
@@ -14,6 +17,10 @@ from simulation.state import (
 import random
 import networkx as nx
 
+from simulation.utils import validate_dict
+
+logger = logging.getLogger(__name__)
+
 lazy_weight = 0.1
 relationship_weight = 0.2
 
@@ -23,6 +30,23 @@ def safe_log(x):
         return 0.0
     return math.log(x)
 
+class SimulationEncoder(json.JSONEncoder):
+
+    # method called for unrecognized values 
+    def default(self, obj):
+        if isinstance(obj, set):
+            return list(obj) 
+        if hasattr(obj, "__dict__"):
+            return obj.__dict__  
+        return super().default(obj)
+
+def fix_tuple_keys_dict(obj):
+    if isinstance(obj,dict):
+        return {(f"{key[0]}-{key[1]}" if isinstance(key,tuple) else key):fix_tuple_keys_dict(value) for key, value in obj.items()}
+    elif isinstance(obj,list):
+        return [fix_tuple_keys_dict(el) for el in obj]
+    else:
+        return obj
 
 @dataclass
 class SimulationMetrics:
@@ -56,6 +80,43 @@ class SimulationParameters:
 class SimulationStats:
     total_number_interactions: int = 0
 
+    @classmethod
+    def from_dict(cls, data: dict) -> SimulationStats:
+        validate_dict(data, cls)
+        return SimulationStats(**data)
+
+@dataclass
+class SimulationIter:
+    tick = 0
+    finished = False
+
+    @classmethod
+    def from_dict(cls, data: dict) -> SimulationIter:
+        validate_dict(data, cls)
+        return SimulationIter(**data)
+
+@dataclass
+class SimulationState:
+    cats: list[Cat] = field(default_factory=list)
+    relationships: dict[tuple[int, int], Relationship] = field(default_factory=dict)
+    edges: list[Edge] = field(default_factory=list)
+    nodes: list[Node] = field(default_factory=list)
+    run: SimulationIter = field(default_factory=SimulationIter)
+    stats: SimulationStats = field(default_factory=SimulationStats)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> SimulationState:
+        validate_dict(data, cls)
+        return SimulationState(
+            cats=[Cat.from_dict(s_cat) for s_cat in data['cats']],
+            relationships={Relationship.parse_key(key): Relationship.from_dict(s_rel) for key, s_rel in data['relationships'].items()},
+            edges=[Edge.from_dict(s_edge) for s_edge in data['edges']],
+            nodes=[Node.from_dict(s_node) for s_node in data['nodes']],
+            run=SimulationIter.from_dict(data['run']),
+            stats= SimulationStats.from_dict(data['stats'],)
+        )
+        
+
 
 class Simulation:
     def __init__(self, params: SimulationParameters):
@@ -63,35 +124,31 @@ class Simulation:
 
         random.seed(self.params.seed)
 
-        self.cats: list[Cat] = []
-        self.relationships: dict[tuple[int, int], Relationship] = {}
-        self.edges: list[Edge] = []
-        self.nodes: list[Node] = []
-        self.stats = SimulationStats()
+        self.state: SimulationState = SimulationState()
 
         self.metrics: Optional[SimulationMetrics] = None
 
     def get_node(self, node_id: int):
-        for node in self.nodes:
+        for node in self.state.nodes:
             if node.id == node_id:
                 return node
 
     def get_nodes_edges(self, node_id: int):
         result = []
-        for edge in self.edges:
+        for edge in self.state.edges:
             if edge.node_in_edge(node_id):
                 result.append(edge)
         return result
 
     def get_nodes_edge_partners(self, node_id):
         result = []
-        for edge in self.edges:
+        for edge in self.state.edges:
             if edge.node_in_edge(node_id):
                 result.append(edge.other_node(node_id))
         return result
 
     def is_home_of_enemy(self, node_id, cat_id):
-        home_cats = [cat.traits.id for cat in self.cats if cat.traits.home == node_id]
+        home_cats = [cat.traits.id for cat in self.state.cats if cat.traits.home == node_id]
         for cat in home_cats:
             if cat == cat_id:
                 return False
@@ -100,7 +157,7 @@ class Simulation:
         return False
 
     def is_home_of_friend(self, node_id, cat_id):
-        home_cats = [cat.traits.id for cat in self.cats if cat.traits.home == node_id]
+        home_cats = [cat.traits.id for cat in self.state.cats if cat.traits.home == node_id]
         for cat in home_cats:
             if cat == cat_id:
                 return False
@@ -109,7 +166,7 @@ class Simulation:
         return False
 
     def is_neutral_node(self, node_id, cat_id):
-        home_cats = [cat.traits.id for cat in self.cats if cat.traits.home == node_id]
+        home_cats = [cat.traits.id for cat in self.state.cats if cat.traits.home == node_id]
         return len(home_cats) == 0
 
     def get_nodes_edge_partners_no_enemy_home(self, node_id, cat_id):
@@ -121,31 +178,31 @@ class Simulation:
         return result
 
     def get_cat(self, cat_id):
-        for cat in self.cats:
+        for cat in self.state.cats:
             if cat.traits.id == cat_id:
                 return cat
 
     def get_cats_on_node(self, node_id):
         result = []
-        for cat in self.cats:
+        for cat in self.state.cats:
             if cat.current_node == node_id:
                 result.append(cat.traits.id)
         return result
 
     def get_relationship(self, cat1, cat2):
         key = tuple(sorted((cat1, cat2)))
-        return self.relationships.get(key)
+        return self.state.relationships.get(key)
 
     def get_friends(self, cat1):
         result = []
-        for rel in self.relationships.values():
+        for rel in self.state.relationships.values():
             if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value < -1e-9:
                 result.append(rel.other_cat(cat1))
         return result
 
     def get_enemies(self, cat1):
         result = []
-        for rel in self.relationships.values():
+        for rel in self.state.relationships.values():
             if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value > 1e-9:
                 result.append(rel.other_cat(cat1))
         return result
@@ -157,20 +214,20 @@ class Simulation:
             number_of_edges = max(
                 1, round(min(random.gauss(self.params.mean_edges, edge_sigma),self.params.node_amount))
             )
-            self.nodes.append(Node(id=i, number_of_edges=number_of_edges))
+            self.state.nodes.append(Node(id=i, number_of_edges=number_of_edges))
 
         # Minimal connected graph
-        available_nodes = [node.id for node in self.nodes]
+        available_nodes = [node.id for node in self.state.nodes]
         connected_nodes = [available_nodes.pop(0)]
 
         while available_nodes:
             n1 = random.choice(connected_nodes)
             n2 = available_nodes.pop(random.randint(0, len(available_nodes) - 1))
-            self.edges.append(Edge(node1=n1, node2=n2))
+            self.state.edges.append(Edge(node1=n1, node2=n2))
             connected_nodes.append(n2)
 
         # Randomly connected graph
-        for node in self.nodes:
+        for node in self.state.nodes:
             edge_partners = self.get_nodes_edge_partners(node.id)
             if len(edge_partners) < number_of_edges:
                 possible_nodes = [i for i in range(self.params.node_amount)]
@@ -179,20 +236,20 @@ class Simulation:
                     rand_node_id = random.choice(possible_nodes)
                     other_node = self.get_node(rand_node_id)
                     if len(self.get_nodes_edges(other_node.id)) < node.number_of_edges:
-                        self.edges.append(Edge(node1=node.id, node2=rand_node_id))
+                        self.state.edges.append(Edge(node1=node.id, node2=rand_node_id))
                     possible_nodes.remove(rand_node_id)
 
         # Cats
         aggressive_sigma = self.params.var_aggressive**0.5
         lazy_sigma = self.params.var_laziness**0.5
         for i in range(self.params.cat_amount):
-            available_nodes = [node.id for node in self.nodes]
+            available_nodes = [node.id for node in self.state.nodes]
             home_id = random.choice(available_nodes)
             aggressive = max(
                 -1, min(1, random.gauss(self.params.mean_aggressive, aggressive_sigma))
             )
             lazy = max(-1, min(1, random.gauss(self.params.mean_laziness, lazy_sigma)))
-            self.cats.append(
+            self.state.cats.append(
                 Cat(
                     CatTraits(
                         id=i,
@@ -205,20 +262,23 @@ class Simulation:
             )
 
         # Relationships
-        available_cats = [cat.traits.id for cat in self.cats]
+        available_cats = [cat.traits.id for cat in self.state.cats]
         related_cats = [available_cats.pop(0)]
         while available_cats:
             for cat in available_cats:
                 c1 = related_cats[-1]
                 c2 = cat
                 key = tuple(sorted((c1, c2)))
-                self.relationships[key] = Relationship(
+                self.state.relationships[key] = Relationship(
                     RelationshipTraits(cat1=c1, cat2=c2)
                 )
             related_cats.append(available_cats.pop(0))
 
+    def serialize_state(self):
+        return json.dumps(fix_tuple_keys_dict(asdict(self.state)),cls=SimulationEncoder)
+
     def movement_step(self):
-        new_cats = self.cats.copy()
+        new_cats = self.state.cats.copy()
         for cat in new_cats:
             if not cat.is_on_the_edge():
                 edge_partners = self.get_nodes_edge_partners_no_enemy_home(
@@ -236,7 +296,7 @@ class Simulation:
                             * relationship_weight
                         )
                     probs[node_id] *= random.uniform(0.9, 1.1)
-                    probs[node_id] = max(0, min(probs[node_id], 1))
+                    probs[node_id] = max(1e-9, min(probs[node_id], 1))
                 if cat.needs_to_run:
                     prob_to_stay = 0.0
                 else:
@@ -251,7 +311,7 @@ class Simulation:
                             * relationship_weight
                         )
                     prob_to_stay *= random.uniform(0.9, 1.1)
-                    prob_to_stay = max(0, min(prob_to_stay, 1))
+                    prob_to_stay = max(1e-9, min(prob_to_stay, 1))
 
                 # chose action
                 choices = list(probs.keys()) + ["stay"]
@@ -288,7 +348,7 @@ class Simulation:
 
     def engagement_step(self):
         result = []
-        for node in self.nodes:
+        for node in self.state.nodes:
             cats_on_node = [self.get_cat(cat) for cat in self.get_cats_on_node(node.id)]
             engaged = set()
             n = len(cats_on_node)
@@ -330,7 +390,7 @@ class Simulation:
                 cat1.traits.aggressive + cat2.traits.aggressive + rel.value
             )
             rel.stats.absolute_delta += 0.05
-            self.stats.total_number_interactions += 1
+            self.state.stats.total_number_interactions += 1
             rel.stats.interacted = True
             if abs(rel.value) < 1e-9:
                 rel.stats.number_of_sign_flips += 1
@@ -361,7 +421,7 @@ class Simulation:
         G = nx.Graph()
 
         G.add_nodes_from(range(self.params.node_amount))
-        for rel in self.relationships.values():
+        for rel in self.state.relationships.values():
             rel.metrics = RelationshipMetrics(
                 stability=1 / (1 + rel.stats.absolute_delta),
                 volatility=rel.stats.absolute_delta / self.params.iterations,
@@ -374,7 +434,7 @@ class Simulation:
 
         cliques = [clique for clique in list(nx.find_cliques(G)) if len(clique) > 2]
 
-        for cat in self.cats:
+        for cat in self.state.cats:
             total_connections = len(cat.stats.interacted_with)
             prob_friends = (
                 0
@@ -450,7 +510,7 @@ class Simulation:
         max_total_interactions = self.params.iterations * max_interactions_per_iteration
 
         interaction_density = (
-            self.stats.total_number_interactions / max_total_interactions
+            self.state.stats.total_number_interactions / max_total_interactions
         )
 
         average_size_friendgroups = (
@@ -464,11 +524,11 @@ class Simulation:
         )
 
         isolated_cats = [
-            cat for cat in self.cats if cat.metrics.percent_of_friends == 0
+            cat for cat in self.state.cats if cat.metrics.percent_of_friends == 0
         ]
 
         relationship_values = [
-            rel.value for rel in self.relationships.values() if rel.stats.interacted
+            rel.value for rel in self.state.relationships.values() if rel.stats.interacted
         ]
         mean_relationship_value = (
             0
@@ -485,9 +545,16 @@ class Simulation:
             mean_relationship_value=mean_relationship_value,
         )
 
-    def run(self):
-        for i in range(self.params.iterations):
-            self.movement_step()
-            self.engagement_step()
+    def step(self):
+        self.movement_step()
+        self.engagement_step()
+        self.state.run.tick += 1
+        if self.state.run.tick == self.params.iterations:
+            self.state.run.finished = True
 
+    def run(self):
+        while not self.state.run.finished:
+            self.step()
+            yield self
         self.calculate_metrics()
+  

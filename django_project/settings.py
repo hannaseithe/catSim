@@ -157,7 +157,7 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
-            "level": "INFO",
+            "level": "DEBUG",
         },
     },
     "loggers": {
@@ -166,7 +166,7 @@ LOGGING = {
             "level": "INFO",
         },
         "django": {"handlers": ["console"], "level": "INFO"},
-        "cats": {"handlers": ["console"], "level": "INFO"},
+        "cats": {"handlers": ["console"], "level": "DEBUG"},
         "accounts": {"handlers": ["console"], "level": "INFO"},
     },
     "root": {
@@ -206,3 +206,5 @@ SPECTACULAR_SETTINGS = {
 }
 
 AUTH_USER_MODEL = "accounts.CustomUser"
+
+SIMULATION_CHECKPOINT_INTERVAL = 100

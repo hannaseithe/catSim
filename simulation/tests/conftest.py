@@ -44,3 +44,20 @@ def sample_sim():
     params=SimulationParameters(**kwargs)
     return Simulation(params=params)
 
+@pytest.fixture
+def sample_aggressive_sim():
+    kwargs= {
+        "iterations": 200,
+        "seed":1,
+        "cat_amount":4,
+        "node_amount":7,
+        "mean_edges":3,
+        "var_edges":1,
+        "mean_aggressive": -0.9,
+        "var_aggressive": 0.1,
+        "mean_laziness": 0.5,
+        "var_laziness":0.05
+    }
+    params=SimulationParameters(**kwargs)
+    return Simulation(params=params)
+

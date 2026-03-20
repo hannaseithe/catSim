@@ -1,4 +1,4 @@
-# 7. Use JWT Authentication for API Access
+# 5. Use JWT Authentication for API Access
 
 Date: 2026-01-19
 

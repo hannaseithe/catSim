@@ -1,3 +1,4 @@
+
 import pytest
 
 from cats.models import InvalidSimulationState, SimulationRun
@@ -65,6 +66,32 @@ def test_cannot_start_if_not_pending(create_simulation):
 
     with pytest.raises(InvalidSimulationState):
         sim.mark_running()
+
+
+@pytest.mark.django_db
+def test_mark_paused(create_simulation):
+    sim = create_simulation()
+
+    sim.mark_running()
+
+    sim.pause_requested = True
+
+    sim.mark_paused()
+    assert sim.pause_requested is False
+    assert sim.status == SimulationRun.Status.PAUSED
+    assert sim.stopped_at is not None
+
+@pytest.mark.django_db
+def test_fail_mark_paused(create_simulation):
+    sim = create_simulation()
+
+    sim.mark_running()
+    sim.mark_completed()
+
+    sim.pause_requested = True
+
+    with pytest.raises(InvalidSimulationState):
+        sim.mark_paused()
 
 
 @pytest.mark.django_db
