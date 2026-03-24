@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import override_settings
 import pytest
 
@@ -71,3 +73,22 @@ def test_simulation_run_logic_fail(create_user):
     run.refresh_from_db()
     assert run.status == SimulationRun.Status.FAILED
     assert run.error_message == "iterations must be greater than 0"
+    assert run.checkpoint_state is None
+
+
+@pytest.mark.django_db
+def test_simulation_run_logic_fail_inside_sim_loop(create_user):
+    
+    user = create_user()
+    run = SimulationRun.objects.create(
+        params={"iterations": 9, "cat_amount": 3, "node_amount": 10},
+        user=user
+    )
+    run.mark_run_queued()
+    with patch("cats.tasks.SimulationRun.refresh_from_db") as mock_refresh:
+        mock_refresh.side_effect = [None, Exception("mid-loop-failure")]
+        run_simulation_logic(run.id)
+    run.refresh_from_db()
+    assert run.status == SimulationRun.Status.FAILED
+    assert run.error_message == "mid-loop-failure"
+    assert run.checkpoint_state is not None

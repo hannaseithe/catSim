@@ -21,6 +21,8 @@ def run_simulation_logic(run_id):
     run = SimulationRun.objects.get(id=run_id)
     resume = run.queued_for == SimulationRun.Queued.RESUME
     run.mark_running()
+    sim = None
+    last_good_sim = None
     try:
         params = SimulationParameters(**run.params)
         sim = Simulation(params=params)
@@ -31,18 +33,15 @@ def run_simulation_logic(run_id):
             logger.info(f"Simulation {run.id} started")
             sim.generate_initial_state()
         for sim in sim.run():
+            last_good_sim = sim
             run.refresh_from_db(fields=['pause_requested'])
             if run.pause_requested:
-                run.checkpoint_tick = sim.state.run.tick
-                run.checkpoint_state = sim.serialize_state()
-                run.save(update_fields=["checkpoint_tick", "checkpoint_state"])
+                save_checkpoint(run, sim)
                 run.mark_paused()
                 logger.info(f"Simulation id:{run.id} has been paused on tick: {run.checkpoint_tick}")
                 return
             if sim.state.run.tick % settings.SIMULATION_CHECKPOINT_INTERVAL == 0:
-                run.checkpoint_tick = sim.state.run.tick
-                run.checkpoint_state = sim.serialize_state()
-                run.save(update_fields=["checkpoint_tick", "checkpoint_state"])
+                save_checkpoint(run, sim)
 
         metrics = extract_metrics(sim)
 
@@ -54,5 +53,15 @@ def run_simulation_logic(run_id):
         logger.info(f"Simulation id:{run.id} finished with Results id:{results.id}")
 
     except Exception as e:
+        try:
+            if last_good_sim is not None:
+                save_checkpoint(run, last_good_sim)
+        except Exception as inner_e:
+            logger.exception(f"Checkpoint save failed for failed simulation {run.id}. Error: {inner_e}")
         run.mark_failed(str(e))
         logger.exception(f"Simulation {run.id} failed. Error: {run.error_message}")
+
+def save_checkpoint(run: SimulationRun, sim: Simulation):
+    run.checkpoint_tick = sim.state.run.tick
+    run.checkpoint_state = sim.serialize_state()
+    run.save(update_fields=["checkpoint_tick", "checkpoint_state"])
