@@ -13,7 +13,8 @@ def test_simulation_run_logic(create_user):
         params={"iterations": 9, "cat_amount": 3, "node_amount": 10},
         user=user
     )
-    run_simulation_logic(run.id,resume=False)
+    run.mark_run_queued()
+    run_simulation_logic(run.id)
     run.refresh_from_db()
     assert run.status == SimulationRun.Status.FINISHED
     assert run.checkpoint_state is not None
@@ -28,7 +29,8 @@ def test_simulation_run_pause_logic(create_user):
     )
     run.pause_requested = True
     run.save(update_fields=['pause_requested'])
-    run_simulation_logic(run.id,resume=False)
+    run.mark_run_queued()
+    run_simulation_logic(run.id)
     run.refresh_from_db()
     assert run.status == SimulationRun.Status.PAUSED
     assert run.checkpoint_state is not None
@@ -44,11 +46,13 @@ def test_simulation_run_resume_logic(create_user):
     )
     run.pause_requested = True
     run.save(update_fields=['pause_requested'])
-    run_simulation_logic(run.id,resume=False)
+    run.mark_run_queued()
+    run_simulation_logic(run.id)
     run.refresh_from_db()
     assert run.status == SimulationRun.Status.PAUSED
 
-    run_simulation_logic(run.id,resume=True)
+    run.mark_resume_queued()
+    run_simulation_logic(run.id)
     run.refresh_from_db()
     assert run.status == SimulationRun.Status.FINISHED
     assert run.checkpoint_state is not None
@@ -62,8 +66,8 @@ def test_simulation_run_logic_fail(create_user):
         params={"iterations": -1, "cat_amount": 3, "node_amount": 10},
         user=user
     )
-
-    run_simulation_logic(run.id, resume=False)
+    run.mark_run_queued()
+    run_simulation_logic(run.id)
     run.refresh_from_db()
     assert run.status == SimulationRun.Status.FAILED
     assert run.error_message == "iterations must be greater than 0"

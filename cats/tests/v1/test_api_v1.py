@@ -69,6 +69,7 @@ def test_simulation_get_detail(api_client, create_simulation, create_user, auth_
 def test_simulation_get_error(create_simulation, create_user, auth_client_with_refresh_v1):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user = user)
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_failed("This is an error message")
     sim_data = SimulationErrorSerializerV1(sim).data
@@ -86,6 +87,7 @@ def test_simulation_get_error(create_simulation, create_user, auth_client_with_r
 def test_simulation_get_error_with_uuid(create_simulation, create_user, auth_client_with_refresh_v1):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user = user)
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_failed("This is an error message")
     sim_data = SimulationErrorSerializerV1(sim).data
@@ -103,6 +105,7 @@ def test_simulation_get_error_with_uuid(create_simulation, create_user, auth_cli
 def test_simulation_get_error_if_not_failed(create_simulation, create_user, auth_client_with_refresh_v1):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user = user)
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_completed()
 
@@ -121,6 +124,7 @@ def test_simulation_get_results(create_results, create_user, auth_client_with_re
     user = create_user(email="test1@email.com",password="test1password")
     results = create_results(user=user)
     sim = results.run
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_completed()
     results_data = SimulationResultSerializerV1(results).data
@@ -140,6 +144,7 @@ def test_simulation_get_results_if_not_finished(create_results, create_user, aut
     user = create_user(email="test1@email.com",password="test1password")
     results = create_results(user=user)
     sim = results.run
+    sim.mark_run_queued()
     sim.mark_running()
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
@@ -381,7 +386,7 @@ def test_simulation_resume(mock_delay,create_user, auth_client_with_refresh_v1):
     assert response.data["id"] == run.id
     assert response.data["detail"] == "The SimulationRun has been queued to be resumed."
 
-    mock_delay.assert_called_once_with(run.id, resume=True)
+    mock_delay.assert_called_once_with(run.id)
 
 @pytest.mark.django_db
 def test_simulation_resume_fail(create_user, auth_client_with_refresh_v1):
@@ -404,5 +409,39 @@ def test_simulation_resume_fail(create_user, auth_client_with_refresh_v1):
     assert response.data["id"] == run.id
     assert response.data["detail"] == "The SimulationRun has not been paused or cancelled, and can therefore not be resumed."
 
+@pytest.mark.django_db
+@patch("cats.api.v1.views.run_simulation.delay")
+def test_simulation_resume_idempotency(mock_delay,create_user, auth_client_with_refresh_v1):
+    mock_task = MagicMock()
+    mock_task.id = "fake-task-id-123"
+    mock_delay.return_value = mock_task
 
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.PAUSED,
+        params=json.dumps({})
+    )
+
+    url = reverse("v1-simulation-resume-id", args=[run.id])
+    response1 = auth_client.post(
+        url
+    )
+
+    assert response1.status_code == 200
+    assert response1.data["id"] == run.id
+    assert response1.data["detail"] == "The SimulationRun has been queued to be resumed."
+
+    response2 = auth_client.post(
+        url
+    )
+
+    assert response2.status_code == 409
+    assert response2.data["id"] == run.id
+    assert response2.data["detail"] == "The resume of the SimulationRun has already been queued."
+
+    mock_delay.assert_called_once_with(run.id)
 

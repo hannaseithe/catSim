@@ -8,16 +8,17 @@ from cats.tests.conftest import DUMMY_METRICS
 @pytest.mark.django_db
 def test_model_simulation_run(create_simulation):
     sim = create_simulation()
+    assert sim.uuid is not None
     assert sim.status == SimulationRun.Status.PENDING
     assert sim.created_at is not None
-    assert sim.started_at is None
-    assert sim.finished_at is None
+    assert not sim.pause_requested
 
 
 @pytest.mark.django_db
 def test_model_simulation_run_success_lifecycle(create_simulation):
     sim = create_simulation()
 
+    sim.mark_run_queued()
     sim.mark_running()
     assert sim.started_at is not None
     assert sim.status == SimulationRun.Status.RUNNING
@@ -31,6 +32,7 @@ def test_model_simulation_run_success_lifecycle(create_simulation):
 def test_model_simulation_run_fail_lifecycle(create_simulation):
     sim = create_simulation()
 
+    sim.mark_run_queued()
     sim.mark_running()
     assert sim.started_at is not None
     assert sim.status == SimulationRun.Status.RUNNING
@@ -61,6 +63,7 @@ def test_cannot_fail_without_running(create_simulation):
 def test_cannot_start_if_not_pending(create_simulation):
     sim = create_simulation()
 
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_completed()
 
@@ -72,6 +75,7 @@ def test_cannot_start_if_not_pending(create_simulation):
 def test_mark_paused(create_simulation):
     sim = create_simulation()
 
+    sim.mark_run_queued()
     sim.mark_running()
 
     sim.pause_requested = True
@@ -85,6 +89,7 @@ def test_mark_paused(create_simulation):
 def test_fail_mark_paused(create_simulation):
     sim = create_simulation()
 
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_completed()
 

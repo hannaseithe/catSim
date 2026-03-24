@@ -77,6 +77,7 @@ def test_simulation_status(create_simulation):
 @pytest.mark.django_db
 def test_simulation_error(create_simulation):
     sim = create_simulation()
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_failed("Failed for Test")
     serializer = SimulationErrorSerializer(sim)

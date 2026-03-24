@@ -69,7 +69,7 @@ class SimulationStatusSerializerV1(serializers.ModelSerializer):
     params = serializers.SerializerMethodField()
     class Meta:
         model = SimulationRun
-        fields = ["id", "uuid", "status", "created_at", "started_at", "finished_at", "stopped_at", "params", "user"]
+        fields = ["id", "uuid", "status", "queued_for", "created_at", "started_at", "finished_at", "stopped_at", "params", "user"]
     
 
     def get_params(self, obj) -> JSONType:

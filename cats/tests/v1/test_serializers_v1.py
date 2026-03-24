@@ -70,6 +70,7 @@ def test_simulation_status(create_simulation):
 
     assert serializer.data["id"] == sim.id, "Serializer id unexpectedly does not equal simulation id"
     assert serializer.data["status"] == sim.status, "Serializer status unexpectedly does not equal simulation status"
+    assert serializer.data["queued_for"] == sim.queued_for, "Serializer queued_for unexpectedly does not equal simulation queued_for"
     assert serializer.data["user"] == sim.user.id, "Serializer user unexpectedly does not equal simulation user"
     assert serializer.data["params"] == sim.params, "Serializer params unexpectedly does not equal simulation params"
     assert all(f in serializer.data for f in ["created_at", "finished_at", "started_at", "stopped_at"])
@@ -77,6 +78,7 @@ def test_simulation_status(create_simulation):
 @pytest.mark.django_db
 def test_simulation_error(create_simulation):
     sim = create_simulation()
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_failed("Failed for Test")
     serializer = SimulationErrorSerializerV1(sim)

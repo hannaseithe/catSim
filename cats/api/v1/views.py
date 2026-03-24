@@ -120,6 +120,7 @@ class SimulationStartView(APIView):
                 uuid=uuid, defaults={"user": request.user, "params": params}
             )
             if created:
+                run.mark_run_queued()
                 task_result = run_simulation.delay(run.id)
                 run.celery_task_id = task_result.id
                 run.save()
@@ -221,37 +222,49 @@ class SimulationPauseView(APIView):
     request=None,
     responses={
         200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been queued to be resumed."),
-        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not paused or canceled, and can therefore not be resumed."),
+        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not paused or canceled, and can therefore not be resumed. Or a resume has already been queued."),
     },
 )
 class SimulationResumeView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
     def post(self, request, simulation_id=None, simulation_uuid=None):
-        if simulation_id is not None:
-            run = get_object_or_404(SimulationRun, id=simulation_id)
-        elif simulation_uuid is not None:
-            run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
-        else:
-            return Response({"detail": "No identifier provided."}, status=400)
+        with transaction.atomic():
+            if simulation_id is not None:
+                run = get_object_or_404(SimulationRun.objects.select_for_update(), id=simulation_id)
+            elif simulation_uuid is not None:
+                run = get_object_or_404(SimulationRun.objects.select_for_update(), uuid=simulation_uuid)
+            else:
+                return Response({"detail": "No identifier provided."}, status=400)
 
-        self.check_object_permissions(request, run)
+            self.check_object_permissions(request, run)
 
-        identifiers = {"id": run.id, "uuid": run.uuid}
-        if run.status not in (
-            SimulationRun.Status.PAUSED,
-            SimulationRun.Status.CANCELED,
-        ):
-            return Response(
-                {
-                    **identifiers,
-                    "detail": "The SimulationRun has not been paused or cancelled, and can therefore not be resumed.",
-                },
-                status=409,
-            )
-        task_result = run_simulation.delay(run.id, resume=True)
-        run.celery_task_id = task_result.id
-        run.save()
+            identifiers = {"id": run.id, "uuid": run.uuid}
+            if run.queued_for in (SimulationRun.Queued.RESUME,):
+                return Response(
+                    {
+                        **identifiers,
+                        "detail": "The resume of the SimulationRun has already been queued.",
+                    },
+                    status=409,
+                )
+
+            if run.status not in (
+                SimulationRun.Status.PAUSED,
+                SimulationRun.Status.CANCELED,
+            ):
+                return Response(
+                    {
+                        **identifiers,
+                        "detail": "The SimulationRun has not been paused or cancelled, and can therefore not be resumed.",
+                    },
+                    status=409,
+                )
+            
+            run.mark_resume_queued()
+            task_result = run_simulation.delay(run.id)
+            run.celery_task_id = task_result.id
+            run.save()
         return Response(
             {**identifiers, "detail": "The SimulationRun has been queued to be resumed."},
             status=200,

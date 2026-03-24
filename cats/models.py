@@ -28,15 +28,23 @@ class SimulationRun(models.Model):
     stopped_at = models.DateTimeField(null=True)
 
     class Status(models.TextChoices):
-        PENDING = "pending", "PENDING"
+        PENDING = "pending", "Pending"
         RUNNING = "running", "Running"
         FINISHED = "finished", "Finished"
         FAILED = "failed", "Failed"
         CANCELED = "canceled", "Canceled"
         PAUSED = "paused", "Paused"
 
+    class Queued(models.TextChoices):
+        RUN = "run", "Run"
+        RESUME = "resume", "Resume"
+
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+
+    queued_for = models.CharField(
+        max_length=20, choices=Queued.choices, null=True
     )
 
     error_message = models.TextField(null=True, blank=True)
@@ -45,17 +53,17 @@ class SimulationRun(models.Model):
     pause_requested = models.BooleanField(default=False)
 
     def mark_running(self):
-        if self.status not in (
-            self.Status.PENDING,
-            self.Status.CANCELED,
-            self.Status.PAUSED,
+        if self.queued_for not in (
+            self.Queued.RUN,
+            self.Queued.RESUME,
         ):
             raise InvalidSimulationState(
-                f"Cannot start simulation in state '{self.status}'"
+                "Cannot start simulation if not queued for start or resume"
             )
         self.status = self.Status.RUNNING
+        self.queued_for = None
         self.started_at = timezone.now()
-        self.save(update_fields=["status", "started_at"])
+        self.save(update_fields=["status", "queued_for", "started_at"])
 
     def mark_completed(self):
         if self.status != self.Status.RUNNING:
@@ -104,6 +112,23 @@ class SimulationRun(models.Model):
         self.pause_requested = False
         self.stopped_at = timezone.now()
         self.save(update_fields=['status','pause_requested','stopped_at'])
+
+    def mark_run_queued(self):
+        if self.status not in (self.Status.PENDING, ):
+            raise InvalidSimulationState(
+                f"Cannot queue simulation for run in state '{self.status}'"
+            )
+        self.queued_for = self.Queued.RUN
+        self.save(update_fields=['queued_for'])
+
+    def mark_resume_queued(self):
+        if self.status not in (self.Status.CANCELED, self.Status.PAUSED):
+            raise InvalidSimulationState(
+                f"Cannot queue simulation for resume in state '{self.status}'"
+            )
+        self.queued_for = self.Queued.RESUME
+        self.save(update_fields=['queued_for'])
+
 
 
 class SimulationResults(models.Model):

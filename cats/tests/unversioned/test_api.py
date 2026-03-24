@@ -67,6 +67,7 @@ def test_simulation_get_detail(api_client, create_simulation, create_user, auth_
 def test_simulation_get_error(create_simulation, create_user, auth_client_with_refresh_unversioned):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user = user)
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_failed("This is an error message")
     sim_data = SimulationErrorSerializer(sim).data
@@ -85,6 +86,7 @@ def test_simulation_get_error(create_simulation, create_user, auth_client_with_r
 def test_simulation_get_error_if_not_failed(create_simulation, create_user, auth_client_with_refresh_unversioned):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user = user)
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_completed()
 
@@ -103,6 +105,7 @@ def test_simulation_get_results(create_results, create_user, auth_client_with_re
     user = create_user(email="test1@email.com",password="test1password")
     results = create_results(user=user)
     sim = results.run
+    sim.mark_run_queued()
     sim.mark_running()
     sim.mark_completed()
     results_data = SimulationResultSerializer(results).data
@@ -122,6 +125,7 @@ def test_simulation_get_results_if_not_finished(create_results, create_user, aut
     user = create_user(email="test1@email.com",password="test1password")
     results = create_results(user=user)
     sim = results.run
+    sim.mark_run_queued()
     sim.mark_running()
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")

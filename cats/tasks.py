@@ -13,12 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True)
-def run_simulation(self, run_id, resume=False):
-    return run_simulation_logic(run_id, resume)
+def run_simulation(self, run_id):
+    return run_simulation_logic(run_id)
 
 
-def run_simulation_logic(run_id, resume):
+def run_simulation_logic(run_id):
     run = SimulationRun.objects.get(id=run_id)
+    resume = run.queued_for == SimulationRun.Queued.RESUME
     run.mark_running()
     try:
         params = SimulationParameters(**run.params)
