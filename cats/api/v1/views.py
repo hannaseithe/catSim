@@ -222,7 +222,7 @@ class SimulationPauseView(APIView):
     request=None,
     responses={
         200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been queued to be resumed."),
-        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not paused or canceled, and can therefore not be resumed. Or a resume has already been queued."),
+        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not paused/canceled/failed OR a resume has already been queued OR no checkpoint state was saved from where it can be resumed"),
     },
 )
 class SimulationResumeView(APIView):
@@ -252,11 +252,21 @@ class SimulationResumeView(APIView):
             if run.status not in (
                 SimulationRun.Status.PAUSED,
                 SimulationRun.Status.CANCELED,
+                SimulationRun.Status.FAILED
             ):
                 return Response(
                     {
                         **identifiers,
-                        "detail": "The SimulationRun has not been paused or cancelled, and can therefore not be resumed.",
+                        "detail": "The SimulationRun has not been paused, cancelled or failed, and can therefore not be resumed.",
+                    },
+                    status=409,
+                )
+            
+            if run.checkpoint_state is None:
+                return Response(
+                    {
+                        **identifiers,
+                        "detail": "The SimulationRun has not been saved on a checkpoint state, and can therefore not be resumed.",
                     },
                     status=409,
                 )

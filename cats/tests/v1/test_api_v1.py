@@ -374,7 +374,8 @@ def test_simulation_resume(mock_delay,create_user, auth_client_with_refresh_v1):
     run = SimulationRun.objects.create(
         user=user,
         status=SimulationRun.Status.PAUSED,
-        params=json.dumps({})
+        params=json.dumps({}),
+        checkpoint_state=json.dumps({}),
     )
 
     url = reverse("v1-simulation-resume-id", args=[run.id])
@@ -389,7 +390,7 @@ def test_simulation_resume(mock_delay,create_user, auth_client_with_refresh_v1):
     mock_delay.assert_called_once_with(run.id)
 
 @pytest.mark.django_db
-def test_simulation_resume_fail(create_user, auth_client_with_refresh_v1):
+def test_simulation_resume_fail_wrong_state(create_user, auth_client_with_refresh_v1):
     user = create_user(email="test1@email.com",password="test1password")
 
     auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
@@ -397,7 +398,8 @@ def test_simulation_resume_fail(create_user, auth_client_with_refresh_v1):
     run = SimulationRun.objects.create(
         user=user,
         status=SimulationRun.Status.RUNNING,
-        params=json.dumps({})
+        params=json.dumps({}),
+        checkpoint_state=json.dumps({})
     )
 
     url = reverse("v1-simulation-resume-id", args=[run.id])
@@ -407,7 +409,29 @@ def test_simulation_resume_fail(create_user, auth_client_with_refresh_v1):
 
     assert response.status_code == 409
     assert response.data["id"] == run.id
-    assert response.data["detail"] == "The SimulationRun has not been paused or cancelled, and can therefore not be resumed."
+    assert response.data["detail"] == "The SimulationRun has not been paused, cancelled or failed, and can therefore not be resumed."
+
+@pytest.mark.django_db
+def test_simulation_resume_fail_no_checkpoint(create_user, auth_client_with_refresh_v1):
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    run = SimulationRun.objects.create(
+        user=user,
+        status=SimulationRun.Status.PAUSED,
+        params=json.dumps({}),
+    )
+
+    url = reverse("v1-simulation-resume-id", args=[run.id])
+    response = auth_client.post(
+        url
+    )
+
+    assert response.status_code == 409
+    assert response.data["id"] == run.id
+    assert response.data["detail"] == "The SimulationRun has not been saved on a checkpoint state, and can therefore not be resumed."
+
 
 @pytest.mark.django_db
 @patch("cats.api.v1.views.run_simulation.delay")
@@ -423,7 +447,8 @@ def test_simulation_resume_idempotency(mock_delay,create_user, auth_client_with_
     run = SimulationRun.objects.create(
         user=user,
         status=SimulationRun.Status.PAUSED,
-        params=json.dumps({})
+        params=json.dumps({}),
+        checkpoint_state=json.dumps({})
     )
 
     url = reverse("v1-simulation-resume-id", args=[run.id])
@@ -431,6 +456,7 @@ def test_simulation_resume_idempotency(mock_delay,create_user, auth_client_with_
         url
     )
 
+    print(response1.data["detail"])
     assert response1.status_code == 200
     assert response1.data["id"] == run.id
     assert response1.data["detail"] == "The SimulationRun has been queued to be resumed."
