@@ -36,7 +36,7 @@ class DateOrDateTimeFilter(filters.IsoDateTimeFilter):
         return super().filter(qs, dt)
 
 class SimulationFilter(filters.FilterSet):
-    status = filters.CharFilter(field_name="status")
+    status = filters.ChoiceFilter(field_name="status", choices= SimulationRun.Status.choices)
     user = filters.NumberFilter(field_name="user",validators=[MinValueValidator(1), MaxValueValidator(1e18)])
     created_at_min = DateOrDateTimeFilter(field_name="created_at", lookup_expr="gte")
     created_at_max = DateOrDateTimeFilter(field_name="created_at", lookup_expr="lte")
