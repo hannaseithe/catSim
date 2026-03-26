@@ -3,6 +3,15 @@
 Simulate the relationships of cats developing over time. Currently this serves mainly the purpose of practicing headless Django and Django REST Framework with a fun little simulation behind it
 
 
+#### [v3.0.0](https://github.com/hannaseithe/catSim/releases/tag/v3.0.0):
+- **Checkpointing**: simulation state is saved to the database every N iterations (configurable via `SIMULATION_CHECKPOINT_INTERVAL`), enabling recovery without starting from scratch
+- **Pause/Resume**: simulations can be paused mid-run and resumed from the last checkpoint
+  - `POST /api/v1/simulations/<id>/pause/` — requests a pause; processed at the next tick
+  - `POST /api/v1/simulations/<id>/resume/` — re-queues the simulation from its last checkpoint; also works for canceled and failed runs
+- **Crash recovery**: on Celery worker restart, any simulation stuck in a running state is automatically re-queued from its last checkpoint
+- **Idempotency**: resume endpoint is protected against duplicate queuing with row-level locking
+- **ADR documentation**: architectural decisions are now documented in `docs/adr/`
+
 #### [v2.2.0](https://github.com/hannaseithe/catSim/releases/tag/v2.2.0):
 - Added Versioning to API: Version 1 of API to be found under `/api/v1/` and old API has been deprecated
 - Idempotent `/api/simulations/start`endpoint by adding `uuid` query parameter 
