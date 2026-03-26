@@ -121,9 +121,11 @@ class SimulationStartView(APIView):
             )
             if created:
                 run.mark_run_queued()
-                task_result = run_simulation.delay(run.id)
-                run.celery_task_id = task_result.id
-                run.save()
+                def start_worker(run=run):
+                    task_result = run_simulation.delay(run.id)
+                    run.celery_task_id = task_result.id
+                    run.save(update_fields=["celery_task_id"])
+                transaction.on_commit(start_worker)
                 logger.info(
                     f"Queued simulation {run.id} with seed {params['seed']} and parameters: {params}"
                 )
@@ -272,9 +274,11 @@ class SimulationResumeView(APIView):
                 )
             
             run.mark_resume_queued()
-            task_result = run_simulation.delay(run.id)
-            run.celery_task_id = task_result.id
-            run.save()
+            def start_worker(run = run):
+                task_result = run_simulation.delay(run.id)
+                run.celery_task_id = task_result.id
+                run.save(update_fields=["celery_task_id"])
+            transaction.on_commit(start_worker)
         return Response(
             {**identifiers, "detail": "The SimulationRun has been queued to be resumed."},
             status=200,

@@ -156,7 +156,7 @@ def test_simulation_get_results_if_not_finished(create_results, create_user, aut
     assert isinstance(data, dict)
     assert data == NOT_COMPLETED_RESPONSE
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("cats.api.v1.views.run_simulation.delay")
 def test_simulation_start(mock_delay, create_user, auth_client_with_refresh_v1):
     mock_task = MagicMock()
@@ -184,7 +184,7 @@ def test_simulation_start(mock_delay, create_user, auth_client_with_refresh_v1):
 
     mock_delay.assert_called_once_with(run.id)
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("cats.api.v1.views.run_simulation.delay")
 def test_simulation_start_idempotency(mock_delay, create_user, auth_client_with_refresh_v1):
     mock_task = MagicMock()
@@ -360,7 +360,7 @@ def test_simulation_pause_fail(create_user, auth_client_with_refresh_v1):
     assert not run.pause_requested
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("cats.api.v1.views.run_simulation.delay")
 def test_simulation_resume(mock_delay,create_user, auth_client_with_refresh_v1):
     mock_task = MagicMock()
@@ -433,7 +433,7 @@ def test_simulation_resume_fail_no_checkpoint(create_user, auth_client_with_refr
     assert response.data["detail"] == "The SimulationRun has not been saved on a checkpoint state, and can therefore not be resumed."
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("cats.api.v1.views.run_simulation.delay")
 def test_simulation_resume_idempotency(mock_delay,create_user, auth_client_with_refresh_v1):
     mock_task = MagicMock()
