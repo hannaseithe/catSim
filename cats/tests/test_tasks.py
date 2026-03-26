@@ -1,10 +1,59 @@
-from unittest.mock import patch
+import json
+from unittest.mock import MagicMock, patch
 
+from celery import states
 from django.test import override_settings
 import pytest
 
 from cats.models import SimulationRun
-from cats.tasks import run_simulation_logic
+from cats.tasks import on_worker_ready, run_simulation_logic
+
+
+@pytest.mark.django_db(transaction=True)
+@patch("cats.tasks.AsyncResult")
+@patch("cats.tasks.run_simulation.delay")
+def test_on_worker_ready(mock_delay, mock_async_result, create_simulation):
+    mock_task_instance = MagicMock()
+    mock_async_result.return_value = mock_task_instance
+    mock_task_instance.state = states.FAILURE
+
+    mock_task = MagicMock()
+    mock_task.id = "fake-task-id-123"
+    mock_delay.return_value = mock_task
+    
+    run = create_simulation(status=SimulationRun.Status.RUNNING)
+
+    on_worker_ready(sender=None)
+
+    run.refresh_from_db()
+
+    mock_delay.assert_called_once_with(run.id)
+    assert run.status == ""
+    assert run.queued_for == SimulationRun.Queued.RUN
+    assert run.celery_task_id == mock_task.id
+
+@pytest.mark.django_db(transaction=True)
+@patch("cats.tasks.AsyncResult")
+@patch("cats.tasks.run_simulation.delay")
+def test_on_worker_ready_with_checkpoint(mock_delay, mock_async_result, create_simulation):
+    mock_task_instance = MagicMock()
+    mock_async_result.return_value = mock_task_instance
+    mock_task_instance.state = states.FAILURE
+
+    mock_task = MagicMock()
+    mock_task.id = "fake-task-id-123"
+    mock_delay.return_value = mock_task
+    
+    run = create_simulation(status=SimulationRun.Status.RUNNING, checkpoint_state=json.dumps({"state":"some state"}))
+
+    on_worker_ready(sender=None)
+
+    run.refresh_from_db()
+
+    mock_delay.assert_called_once_with(run.id)
+    assert run.status == SimulationRun.Status.FAILED
+    assert run.queued_for == SimulationRun.Queued.RESUME
+    assert run.celery_task_id == mock_task.id
 
 
 @pytest.mark.django_db

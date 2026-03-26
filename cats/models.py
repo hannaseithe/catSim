@@ -114,7 +114,7 @@ class SimulationRun(models.Model):
         self.save(update_fields=['status','pause_requested','stopped_at'])
 
     def mark_run_queued(self):
-        if self.status not in (self.Status.PENDING, ):
+        if self.status not in (self.Status.PENDING, "" ):
             raise InvalidSimulationState(
                 f"Cannot queue simulation for run in state '{self.status}'"
             )

@@ -24,7 +24,7 @@ def create_superuser(db):
 
 @pytest.fixture
 def create_simulation(db, create_user):
-    def _create_simulation(created_at=None,user=None, params=None, uuid= None):
+    def _create_simulation(created_at=None,user=None, params=None, uuid= None, status=None, checkpoint_state=None):
         if not uuid:
             uuid=uuid_p.uuid4()
         if not created_at:
@@ -35,7 +35,9 @@ def create_simulation(db, create_user):
             user = create_user()
         if params is None:
             params = {"iterations": 10}
-        return SimulationRun.objects.create(params = params, user=user, created_at=created_at, uuid=uuid)
+        if status is None:
+            status = SimulationRun.Status.PENDING
+        return SimulationRun.objects.create(params = params, user=user, created_at=created_at, uuid=uuid, status=status, checkpoint_state=checkpoint_state)
     return _create_simulation
 
 @pytest.fixture
