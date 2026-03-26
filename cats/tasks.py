@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 
 @worker_ready.connect
 def on_worker_ready(sender, **kwargs):
+    logger.info("on worker_ready started")
     with transaction.atomic():
         qs = SimulationRun.objects.select_for_update().filter(Q(status=SimulationRun.Status.RUNNING) | Q(queued_for=SimulationRun.Queued.RUN) | Q(queued_for=SimulationRun.Queued.RESUME))
         for run in qs:
-            if AsyncResult(run.celery_task_id).state not in (states.STARTED, states.PENDING):
+            if AsyncResult(run.celery_task_id).state in (states.STARTED, states.FAILURE):
                 if run.queued_for is None:
                     if run.checkpoint_state is not None:
                         run.mark_failed("Simulation crashed")
@@ -33,6 +34,7 @@ def on_worker_ready(sender, **kwargs):
                         run.mark_run_queued()
                 def start_worker(run = run):
                     task_result = run_simulation.delay(run.id)
+                    logger.info(f"Simulation with id: {run.id} resumed after celery restart")
                     run.celery_task_id = task_result.id
                     run.save(update_fields=['celery_task_id'])
                 transaction.on_commit(start_worker)
