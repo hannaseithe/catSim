@@ -8,6 +8,7 @@ from cats.api.unversioned.serializers import (
     SimulationStatusSerializer,
 )
 from cats.api.unversioned.views import NOT_COMPLETED_RESPONSE, NOT_FAILED_RESPONSE
+from cats.events import Source
 from cats.models import SimulationRun
 
 def test_login_works(create_user, api_client):
@@ -67,9 +68,9 @@ def test_simulation_get_detail(api_client, create_simulation, create_user, auth_
 def test_simulation_get_error(create_simulation, create_user, auth_client_with_refresh_unversioned):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user = user)
-    sim.mark_run_queued()
-    sim.mark_running()
-    sim.mark_failed("This is an error message")
+    sim.mark_run_queued(source=Source.WORKER)
+    sim.mark_running(source=Source.WORKER, tick=0)
+    sim.mark_failed(error_message="This is an error message", source=Source.WORKER, tick=0)
     sim_data = SimulationErrorSerializer(sim).data
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
@@ -86,9 +87,9 @@ def test_simulation_get_error(create_simulation, create_user, auth_client_with_r
 def test_simulation_get_error_if_not_failed(create_simulation, create_user, auth_client_with_refresh_unversioned):
     user = create_user(email="test1@email.com",password="test1password")
     sim = create_simulation(user = user)
-    sim.mark_run_queued()
-    sim.mark_running()
-    sim.mark_completed()
+    sim.mark_run_queued(source=Source.WORKER)
+    sim.mark_running(source=Source.WORKER, tick=0)
+    sim.mark_completed(source=Source.WORKER, tick=0)
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
     url = reverse("simulation-get-error-id", args=[sim.id])
@@ -105,9 +106,9 @@ def test_simulation_get_results(create_results, create_user, auth_client_with_re
     user = create_user(email="test1@email.com",password="test1password")
     results = create_results(user=user)
     sim = results.run
-    sim.mark_run_queued()
-    sim.mark_running()
-    sim.mark_completed()
+    sim.mark_run_queued(source=Source.WORKER)
+    sim.mark_running(source=Source.WORKER, tick=0)
+    sim.mark_completed(source=Source.WORKER, tick=0)
     results_data = SimulationResultSerializer(results).data
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
@@ -125,8 +126,8 @@ def test_simulation_get_results_if_not_finished(create_results, create_user, aut
     user = create_user(email="test1@email.com",password="test1password")
     results = create_results(user=user)
     sim = results.run
-    sim.mark_run_queued()
-    sim.mark_running()
+    sim.mark_run_queued(source=Source.WORKER)
+    sim.mark_running(source=Source.WORKER, tick=0)
 
     auth_client, _ = auth_client_with_refresh_unversioned(user=user, password="test1password")
     url = reverse("simulation-get-results-id", args=[sim.id])

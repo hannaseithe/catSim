@@ -1,6 +1,8 @@
 from cats.api.v1.serializers import SimulationCreateSerializerV1, SimulationErrorSerializerV1, SimulationResultSerializerV1, SimulationStatusSerializerV1
 import pytest
 
+from cats.events import Source
+
 
 def test_simulation_create_valid(valid_create_sim_args):
     serializer = SimulationCreateSerializerV1(data=valid_create_sim_args)
@@ -78,9 +80,9 @@ def test_simulation_status(create_simulation):
 @pytest.mark.django_db
 def test_simulation_error(create_simulation):
     sim = create_simulation()
-    sim.mark_run_queued()
-    sim.mark_running()
-    sim.mark_failed("Failed for Test")
+    sim.mark_run_queued(source=Source.WORKER)
+    sim.mark_running(source=Source.WORKER, tick=0)
+    sim.mark_failed(error_message="Failed for Test", source=Source.WORKER, tick=0)
     serializer = SimulationErrorSerializerV1(sim)
 
     assert serializer.data["id"] == sim.id, "Serializer id unexpectedly does not equal simulation id"

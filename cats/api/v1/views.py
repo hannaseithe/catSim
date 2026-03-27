@@ -39,7 +39,8 @@ from cats.api.v1.serializers import (
     TokenRequestSerializerV1,
     TokenResponseSerializerV1,
 )
-from cats.models import SimulationResults, SimulationRun
+from cats.events import Action, QueueEvent, Source
+from cats.models import SimulationEvent, SimulationResults, SimulationRun
 from cats.tasks import run_simulation
 
 logger = logging.getLogger(__name__)
@@ -120,15 +121,18 @@ class SimulationStartView(APIView):
                 uuid=uuid, defaults={"user": request.user, "params": params}
             )
             if created:
-                run.mark_run_queued()
+                run.mark_run_queued(source=Source.API)
                 def start_worker(run=run):
                     task_result = run_simulation.delay(run.id)
                     run.celery_task_id = task_result.id
                     run.save(update_fields=["celery_task_id"])
+
+                    logger.info(
+                        f"Queued simulation {run.id} for RUN with seed {run.params['seed']} and parameters: {run.params}"
+                    )
+
                 transaction.on_commit(start_worker)
-                logger.info(
-                    f"Queued simulation {run.id} with seed {params['seed']} and parameters: {params}"
-                )
+
                 return Response(
                     {"id": run.id, "uuid": run.uuid, "status": run.status},
                     status=status.HTTP_201_CREATED,
@@ -176,7 +180,7 @@ class SimulationCancelView(APIView):
                 },
                 status=409,
             )
-        run.cancel()
+        run.cancel(source=Source.API)
         return Response(
             {**identifiers, "detail": "The SimulationRun has been canceled."},
             status=200,
@@ -215,6 +219,12 @@ class SimulationPauseView(APIView):
             )
         run.pause_requested = True
         run.save(update_fields=['pause_requested'])
+
+        logger.info(
+            f"Queued simulation {run.id} for PAUSE"
+        )
+        event = QueueEvent(source=Source.API,action=Action.PAUSE)
+        SimulationEvent.emit_event(run=run,event_type=SimulationEvent.Type.QUEUE, content=event)
         return Response(
             {**identifiers, "detail": "The SimulationRun has been queued to be paused."},
             status=200,
@@ -273,11 +283,16 @@ class SimulationResumeView(APIView):
                     status=409,
                 )
             
-            run.mark_resume_queued()
+            run.mark_resume_queued(source=Source.API)
             def start_worker(run = run):
                 task_result = run_simulation.delay(run.id)
                 run.celery_task_id = task_result.id
                 run.save(update_fields=["celery_task_id"])
+
+                logger.info(
+                    f"Queued simulation {run.id} for RESUME"
+                )
+
             transaction.on_commit(start_worker)
         return Response(
             {**identifiers, "detail": "The SimulationRun has been queued to be resumed."},

@@ -1,4 +1,5 @@
 from datetime import datetime, date, time
+from typing import Callable
 import uuid as uuid_p
 from django.utils import timezone
 from django.urls import reverse
@@ -23,8 +24,8 @@ def create_superuser(db):
     return _create_superuser 
 
 @pytest.fixture
-def create_simulation(db, create_user):
-    def _create_simulation(created_at=None,user=None, params=None, uuid= None, status=None, checkpoint_state=None):
+def create_simulation(db, create_user) -> Callable[[], SimulationRun]:
+    def _create_simulation(created_at=None,user=None, params=None, uuid= None, status=None, checkpoint_state=None) -> SimulationRun:
         if not uuid:
             uuid=uuid_p.uuid4()
         if not created_at:
