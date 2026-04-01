@@ -211,3 +211,10 @@ AUTH_USER_MODEL = "accounts.CustomUser"
 
 SIMULATION_CHECKPOINT_INTERVAL = 100
 SIMULATION_PROGRESS_INTERVAL_DURATION = 1
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+    }
+}

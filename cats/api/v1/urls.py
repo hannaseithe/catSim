@@ -7,8 +7,10 @@ from .views import (
     SimulationDeleteView,
     SimulationDetailView,
     SimulationErrorView,
+    SimulationHealthView,
     SimulationListView,
     SimulationPauseView,
+    SimulationQueueStatusView,
     SimulationResultView,
     SimulationResumeView,
     SimulationStartView,
@@ -16,12 +18,22 @@ from .views import (
 
 
 urlpatterns = [
-    path('schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('token/', CustomTokenObtainPairViewV1.as_view(), name='v1-token-obtain-pair'),
-    path('token/refresh/', CustomTokenRefreshViewV1.as_view(), name='v1-token-refresh'),
+    path("schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("token/", CustomTokenObtainPairViewV1.as_view(), name="v1-token-obtain-pair"),
+    path("token/refresh/", CustomTokenRefreshViewV1.as_view(), name="v1-token-refresh"),
     path(
         "simulations/start/", SimulationStartView.as_view(), name="v1-simulation-start"
+    ),
+    path(
+        "simulations/queue-status/",
+        SimulationQueueStatusView.as_view(),
+        name="v1-simulation-queue-status",
+    ),
+    path(
+        "simulations/health/",
+        SimulationHealthView.as_view(),
+        name="v1-simulation-health",
     ),
     path(
         "simulations/<int:simulation_id>/cancel/",
@@ -43,7 +55,7 @@ urlpatterns = [
         SimulationPauseView.as_view(),
         name="v1-simulation-pause-uuid",
     ),
-      path(
+    path(
         "simulations/<int:simulation_id>/resume/",
         SimulationResumeView.as_view(),
         name="v1-simulation-resume-id",

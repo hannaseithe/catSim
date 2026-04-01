@@ -24,7 +24,7 @@ class SimulationRun(models.Model):
     checkpoint_tick = models.IntegerField(null=True)
     checkpoint_state = models.JSONField(null=True)
 
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
     started_at = models.DateTimeField(null=True)
     finished_at = models.DateTimeField(null=True)
     stopped_at = models.DateTimeField(null=True)
@@ -46,7 +46,7 @@ class SimulationRun(models.Model):
     )
 
     queued_for = models.CharField(
-        max_length=20, choices=Queued.choices, null=True
+        max_length=20, choices=Queued.choices, null=True, db_index=True
     )
 
     error_message = models.TextField(null=True, blank=True)
@@ -181,3 +181,8 @@ class SimulationEvent(models.Model):
     @staticmethod
     def emit_event(run, event_type, content):
         SimulationEvent.objects.create(run=run, event_type=event_type, content=asdict(content))
+
+    class Meta:
+        indexes=[
+            models.Index(fields=["run", "event_type", "logged_at"])
+        ]

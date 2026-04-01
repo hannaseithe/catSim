@@ -1,20 +1,35 @@
+from datetime import timedelta
 import logging
 import secrets
+from django.core.cache import cache
 from django.db import transaction
-from django.db.models import F, IntegerField
-from django.db.models.functions import Cast
+from django.db.models import (
+    F,
+    Q,
+    Avg,
+    Count,
+    DurationField,
+    ExpressionWrapper,
+    IntegerField,
+    OuterRef,
+    Subquery,
+)
+from django.db.models.functions import Cast, Coalesce
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
+from django_project.celery import app
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiResponse,
     extend_schema,
     OpenApiParameter,
     OpenApiRequest,
+    inline_serializer,
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
@@ -99,8 +114,14 @@ class CustomTokenRefreshViewV1(TokenRefreshView):
 
 @extend_schema(
     responses={
-        200: OpenApiResponse(response=SimulationExistsResponseSerializerV1, description="Simulation already exists"),
-        201: OpenApiResponse(response=SimulationCreateResponseSerializerV1, description="Simulation created and queued for run"),
+        200: OpenApiResponse(
+            response=SimulationExistsResponseSerializerV1,
+            description="Simulation already exists",
+        ),
+        201: OpenApiResponse(
+            response=SimulationCreateResponseSerializerV1,
+            description="Simulation created and queued for run",
+        ),
     }
 )
 class SimulationStartView(APIView):
@@ -122,6 +143,7 @@ class SimulationStartView(APIView):
             )
             if created:
                 run.mark_run_queued(source=Source.API)
+
                 def start_worker(run=run):
                     task_result = run_simulation.delay(run.id)
                     run.celery_task_id = task_result.id
@@ -151,8 +173,14 @@ class SimulationStartView(APIView):
 @extend_schema(
     request=None,
     responses={
-        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been canceled."),
-        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not pending nor running, and can therefore not be canceled."),
+        200: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun has been canceled.",
+        ),
+        409: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun is not pending nor running, and can therefore not be canceled.",
+        ),
     },
 )
 class SimulationCancelView(APIView):
@@ -186,11 +214,18 @@ class SimulationCancelView(APIView):
             status=200,
         )
 
+
 @extend_schema(
     request=None,
     responses={
-        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been queued to be paused."),
-        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not running, and can therefore not be paused."),
+        200: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun has been queued to be paused.",
+        ),
+        409: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun is not running, and can therefore not be paused.",
+        ),
     },
 )
 class SimulationPauseView(APIView):
@@ -207,9 +242,7 @@ class SimulationPauseView(APIView):
         self.check_object_permissions(request, run)
 
         identifiers = {"id": run.id, "uuid": run.uuid}
-        if run.status not in (
-            SimulationRun.Status.RUNNING,
-        ):
+        if run.status not in (SimulationRun.Status.RUNNING,):
             return Response(
                 {
                     **identifiers,
@@ -218,23 +251,33 @@ class SimulationPauseView(APIView):
                 status=409,
             )
         run.pause_requested = True
-        run.save(update_fields=['pause_requested'])
+        run.save(update_fields=["pause_requested"])
 
-        logger.info(
-            f"Queued simulation {run.id} for PAUSE"
+        logger.info(f"Queued simulation {run.id} for PAUSE")
+        event = QueueEvent(source=Source.API, action=Action.PAUSE)
+        SimulationEvent.emit_event(
+            run=run, event_type=SimulationEvent.Type.QUEUE, content=event
         )
-        event = QueueEvent(source=Source.API,action=Action.PAUSE)
-        SimulationEvent.emit_event(run=run,event_type=SimulationEvent.Type.QUEUE, content=event)
         return Response(
-            {**identifiers, "detail": "The SimulationRun has been queued to be paused."},
+            {
+                **identifiers,
+                "detail": "The SimulationRun has been queued to be paused.",
+            },
             status=200,
         )
-    
+
+
 @extend_schema(
     request=None,
     responses={
-        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been queued to be resumed."),
-        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun is not paused/canceled/failed OR a resume has already been queued OR no checkpoint state was saved from where it can be resumed"),
+        200: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun has been queued to be resumed.",
+        ),
+        409: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun is not paused/canceled/failed OR a resume has already been queued OR no checkpoint state was saved from where it can be resumed",
+        ),
     },
 )
 class SimulationResumeView(APIView):
@@ -243,9 +286,13 @@ class SimulationResumeView(APIView):
     def post(self, request, simulation_id=None, simulation_uuid=None):
         with transaction.atomic():
             if simulation_id is not None:
-                run = get_object_or_404(SimulationRun.objects.select_for_update(), id=simulation_id)
+                run = get_object_or_404(
+                    SimulationRun.objects.select_for_update(), id=simulation_id
+                )
             elif simulation_uuid is not None:
-                run = get_object_or_404(SimulationRun.objects.select_for_update(), uuid=simulation_uuid)
+                run = get_object_or_404(
+                    SimulationRun.objects.select_for_update(), uuid=simulation_uuid
+                )
             else:
                 return Response({"detail": "No identifier provided."}, status=400)
 
@@ -264,7 +311,7 @@ class SimulationResumeView(APIView):
             if run.status not in (
                 SimulationRun.Status.PAUSED,
                 SimulationRun.Status.CANCELED,
-                SimulationRun.Status.FAILED
+                SimulationRun.Status.FAILED,
             ):
                 return Response(
                     {
@@ -273,7 +320,7 @@ class SimulationResumeView(APIView):
                     },
                     status=409,
                 )
-            
+
             if run.checkpoint_state is None:
                 return Response(
                     {
@@ -282,28 +329,37 @@ class SimulationResumeView(APIView):
                     },
                     status=409,
                 )
-            
+
             run.mark_resume_queued(source=Source.API)
-            def start_worker(run = run):
+
+            def start_worker(run=run):
                 task_result = run_simulation.delay(run.id)
                 run.celery_task_id = task_result.id
                 run.save(update_fields=["celery_task_id"])
 
-                logger.info(
-                    f"Queued simulation {run.id} for RESUME"
-                )
+                logger.info(f"Queued simulation {run.id} for RESUME")
 
             transaction.on_commit(start_worker)
         return Response(
-            {**identifiers, "detail": "The SimulationRun has been queued to be resumed."},
+            {
+                **identifiers,
+                "detail": "The SimulationRun has been queued to be resumed.",
+            },
             status=200,
         )
+
 
 @extend_schema(
     request=None,
     responses={
-        200: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has been deleted."),
-        409: OpenApiResponse(response=SimulationActionResponseSerializerV1, description="The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first."),
+        200: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun has been deleted.",
+        ),
+        409: OpenApiResponse(
+            response=SimulationActionResponseSerializerV1,
+            description="The SimulationRun has not finished, and can therefore not be deleted. Cancel the simulation first.",
+        ),
     },
 )
 class SimulationDeleteView(APIView):
@@ -341,7 +397,10 @@ class SimulationDeleteView(APIView):
 
 @extend_schema(
     responses={
-        200: OpenApiResponse(response=SimulationStatusSerializerV1, description="Detailed Information on a simulation run"),
+        200: OpenApiResponse(
+            response=SimulationStatusSerializerV1,
+            description="Detailed Information on a simulation run",
+        ),
     }
 )
 class SimulationDetailView(APIView):
@@ -363,8 +422,13 @@ class SimulationDetailView(APIView):
 
 @extend_schema(
     responses={
-        200: OpenApiResponse(response=SimulationErrorSerializerV1, description="Error information if the simulation run has failed"),
-        409: OpenApiResponse(response=DetailSerializer, description="Simulation has not failed."),
+        200: OpenApiResponse(
+            response=SimulationErrorSerializerV1,
+            description="Error information if the simulation run has failed",
+        ),
+        409: OpenApiResponse(
+            response=DetailSerializer, description="Simulation has not failed."
+        ),
     }
 )
 class SimulationErrorView(APIView):
@@ -390,8 +454,13 @@ class SimulationErrorView(APIView):
 
 @extend_schema(
     responses={
-        200: OpenApiResponse(response=SimulationResultSerializerV1, description="The results of a completed simulation run"),
-        409: OpenApiResponse(response=DetailSerializer, description="Simulation has not completed."),
+        200: OpenApiResponse(
+            response=SimulationResultSerializerV1,
+            description="The results of a completed simulation run",
+        ),
+        409: OpenApiResponse(
+            response=DetailSerializer, description="Simulation has not completed."
+        ),
     }
 )
 class SimulationResultView(APIView):
@@ -489,7 +558,10 @@ class SimulationResultView(APIView):
         ),
     ],
     responses={
-        200: OpenApiResponse(response=SimulationStatusSerializerV1,description= "Returns a list of simulations"),
+        200: OpenApiResponse(
+            response=SimulationStatusSerializerV1,
+            description="Returns a list of simulations",
+        ),
     },
 )
 class SimulationListView(ListAPIView):
@@ -520,3 +592,131 @@ class SimulationListView(ListAPIView):
             node_amount=Cast(F("params__node_amount"), IntegerField()),
         )
         return qs
+
+
+@extend_schema(
+    responses={
+        200: inline_serializer(
+            name="QueueStatusResponse",
+            fields={
+                "queue_depth": serializers.IntegerField(),
+                "avg_waiting_time": serializers.FloatField(allow_null=True),
+            }
+        )
+    }
+)
+class SimulationQueueStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queue_depth = SimulationRun.objects.filter(queued_for__isnull=False).count()
+
+        def query_avg_waiting_time():
+            latest_queue_events = (
+                SimulationEvent.objects.filter(
+                    run=OuterRef("id"), event_type=SimulationEvent.Type.QUEUE
+                )
+                .order_by("-logged_at")
+                .values("logged_at")[:1]
+            )
+            result =  (
+                SimulationRun.objects.filter(
+                    created_at__gte=timezone.now() - timedelta(days=1)
+                )
+                .annotate(latest_queued_at=Subquery(latest_queue_events))
+                .annotate(
+                    waiting_time=ExpressionWrapper(
+                        F("started_at") - F("latest_queued_at"),
+                        output_field=DurationField(),
+                    )
+                )
+                .aggregate(avg_waiting_time=Avg("waiting_time"))["avg_waiting_time"]
+            )
+            return result.total_seconds() if result else None
+
+        avg_waiting_time = cache.get_or_set("queue_status:avg_waiting_time", lambda: query_avg_waiting_time(), timeout=60)
+
+
+        return Response(
+            {
+                "queue_depth": queue_depth,
+                "avg_waiting_time": avg_waiting_time,
+            },
+            status=200,
+        )
+
+
+@extend_schema(
+    responses={
+        200: inline_serializer(
+            name="HealthResponse",
+            fields={
+                "success_rate": serializers.FloatField(allow_null=True),
+                "failure_per_run": serializers.FloatField(allow_null=True),
+                "resume_per_run": serializers.FloatField(allow_null=True),
+                "worker_ok": serializers.BooleanField(),
+            }
+        )
+    }
+)
+class SimulationHealthView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        def query_success_rate():
+            result = SimulationRun.objects.filter(
+                Q(created_at__gte=timezone.now() - timedelta(days=1))
+            ).aggregate(
+                finished=Count("id", filter=Q(status=SimulationRun.Status.FINISHED)),
+                failed=Count("id", filter=Q(status=SimulationRun.Status.FAILED)),
+            )
+            return (
+                0
+                if result["failed"] == 0 and result["finished"] == 0
+                else result["finished"] / (result["finished"] + result["failed"])
+            )
+        success_rate = cache.get_or_set("health:success_rate", lambda: query_success_rate(), timeout=300)
+
+        def query_failure_per_run():
+            failed_amount = (
+                SimulationEvent.objects.filter(run=OuterRef("id"), event_type=SimulationEvent.Type.STATE_TRANSITION, content__new_status=SimulationRun.Status.FAILED)
+                .values('run').annotate(c=Count('id')).values('c')[:1] 
+            )
+            result = (
+                SimulationRun.objects.filter(
+                    created_at__gte=timezone.now() - timedelta(days=1)
+                )
+                .annotate(failed_amount=Coalesce(Subquery(failed_amount), 0))
+                .aggregate(avg_failed=Avg("failed_amount"))["avg_failed"]
+            ) 
+            return result if result else 0
+
+        failure_per_run = cache.get_or_set("health:failure_per_run", lambda: query_failure_per_run(), timeout=300)
+
+        def query_resume_per_run():
+            resume_amount = (
+                SimulationEvent.objects.filter(run=OuterRef("id"), event_type=SimulationEvent.Type.QUEUE, content__action=Action.RESUME)
+                .values('run').annotate(c=Count('id')).values('c')[:1] 
+            )
+            result =  (
+                SimulationRun.objects.filter(
+                    created_at__gte=timezone.now() - timedelta(days=1)
+                )
+                .annotate(resumed_amount=Coalesce(Subquery(resume_amount),0))
+                .aggregate(avg_resumed=Avg("resumed_amount"))["avg_resumed"]
+            )
+            return result if result else 0
+        
+        resume_per_run = cache.get_or_set("health:resume_per_run", lambda: query_resume_per_run(), timeout=300)
+
+        worker_ok = bool(app.control.inspect(timeout=0.1).ping())
+
+        return Response({
+            "success_rate": success_rate,
+            "failure_per_run": failure_per_run,
+            "resume_per_run": resume_per_run,
+            "worker_ok": worker_ok
+        }, status=200)
+
+

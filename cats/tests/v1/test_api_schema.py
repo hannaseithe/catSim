@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 import pytest
 from rest_framework_simplejwt.tokens import RefreshToken
 import schemathesis
+from schemathesis.specs.openapi.checks import ignored_auth
 from cats.api.v1.serializers import SimulationParamsSerializerV1
 from django_project.wsgi import application
 from hypothesis import settings, HealthCheck
@@ -34,6 +35,7 @@ def auth_headers(db):
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @schema.parametrize()
 def test_api(case, auth_headers, db):
+    #we have to monkey_patch the authorization header
     case.headers = {**case.headers, **auth_headers}
     response = case.call(app=application)
 
@@ -66,4 +68,4 @@ def test_api(case, auth_headers, db):
                 if var_edges * 3 >= mean_edges:
                     return
     
-    case.validate_response(response)
+    case.validate_response(response, excluded_checks=[ignored_auth])

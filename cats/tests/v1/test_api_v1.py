@@ -1,6 +1,7 @@
 import json
 import uuid
 from unittest.mock import MagicMock, patch
+from django.core.cache import cache
 from django.urls import reverse
 import pytest
 
@@ -471,4 +472,95 @@ def test_simulation_resume_idempotency(mock_delay,create_user, auth_client_with_
     assert response2.data["detail"] == "The resume of the SimulationRun has already been queued."
 
     mock_delay.assert_called_once_with(run.id)
+
+
+@pytest.mark.django_db
+def test_queue_status(create_user, auth_client_with_refresh_v1, create_simulation):
+    cache.clear()
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    url = reverse("v1-simulation-queue-status")
+    response = auth_client.get(
+        url
+    )
+
+    assert response.status_code == 200
+    assert response.data["queue_depth"] == 0
+    assert response.data["avg_waiting_time"] is None
+
+    run = create_simulation()
+    run.mark_run_queued(source=Source.WORKER)
+    cache.delete("queue_status:avg_waiting_time")
+
+    response2 = auth_client.get(
+        url
+    )
+
+    assert response2.status_code == 200
+    assert response2.data["queue_depth"] == 1
+    assert response2.data["avg_waiting_time"] is None
+
+    run.mark_running(source=Source.WORKER, tick=0)
+    cache.delete("queue_status:avg_waiting_time")
+
+    response3 = auth_client.get(
+        url
+    )
+
+    assert response3.status_code == 200
+    assert response3.data["queue_depth"] == 0
+    assert response3.data["avg_waiting_time"] is not None
+
+@pytest.mark.django_db
+@patch("cats.api.v1.views.app.control.inspect")
+def test_health(mock_inspect, create_user, auth_client_with_refresh_v1, create_simulation):
+    cache.clear()
+    mock_inspect.return_value.ping.return_value = True
+    user = create_user(email="test1@email.com",password="test1password")
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+
+    url = reverse("v1-simulation-health")
+    response1 = auth_client.get(
+        url
+    )
+
+    assert response1.status_code == 200
+    assert response1.data["success_rate"] == 0
+    assert response1.data["failure_per_run"] == 0
+    assert response1.data["resume_per_run"] == 0
+    assert response1.data["worker_ok"]
+
+    mock_inspect.return_value.ping.assert_called_once()
+
+    run1 = create_simulation(user=user)
+    run2 = create_simulation(user=user)
+
+    run1.mark_run_queued(source=Source.WORKER)
+    run2.mark_run_queued(source=Source.WORKER)
+
+    run1.mark_running(source=Source.WORKER, tick=0)
+    run2.mark_running(source=Source.WORKER, tick=0)
+
+    run1.mark_completed(source=Source.WORKER,tick=10)
+    run2.mark_failed(source=Source.WORKER, tick=5, error_message="Failed for Test")
+
+    run2.mark_resume_queued(source=Source.WORKER)
+    run2.mark_running(source=Source.WORKER, tick=5)
+    run2.mark_failed(source=Source.WORKER, tick=6, error_message="Failed for Test")
+
+    cache.clear()
+
+    response2 = auth_client.get(
+        url
+    )
+
+    assert response2.status_code == 200
+    assert response2.data["success_rate"] == 0.5
+    assert response2.data["failure_per_run"] == 1.0
+    assert response2.data["resume_per_run"] == 0.5
+    
+
 
