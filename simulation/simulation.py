@@ -30,23 +30,30 @@ def safe_log(x):
         return 0.0
     return math.log(x)
 
-class SimulationEncoder(json.JSONEncoder):
 
-    # method called for unrecognized values 
+class SimulationEncoder(json.JSONEncoder):
+    # method called for unrecognized values
     def default(self, obj):
         if isinstance(obj, set):
-            return list(obj) 
+            return list(obj)
         if hasattr(obj, "__dict__"):
-            return obj.__dict__  
+            return obj.__dict__
         return super().default(obj)
 
+
 def fix_tuple_keys_dict(obj):
-    if isinstance(obj,dict):
-        return {(f"{key[0]}-{key[1]}" if isinstance(key,tuple) else key):fix_tuple_keys_dict(value) for key, value in obj.items()}
-    elif isinstance(obj,list):
+    if isinstance(obj, dict):
+        return {
+            (
+                f"{key[0]}-{key[1]}" if isinstance(key, tuple) else key
+            ): fix_tuple_keys_dict(value)
+            for key, value in obj.items()
+        }
+    elif isinstance(obj, list):
         return [fix_tuple_keys_dict(el) for el in obj]
     else:
         return obj
+
 
 @dataclass
 class SimulationMetrics:
@@ -85,15 +92,17 @@ class SimulationStats:
         validate_dict(data, cls)
         return SimulationStats(**data)
 
+
 @dataclass
 class SimulationIter:
-    tick = 0
-    finished = False
+    tick: int = 0
+    finished: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> SimulationIter:
         validate_dict(data, cls)
         return SimulationIter(**data)
+
 
 @dataclass
 class SimulationState:
@@ -108,14 +117,18 @@ class SimulationState:
     def from_dict(cls, data: dict) -> SimulationState:
         validate_dict(data, cls)
         return SimulationState(
-            cats=[Cat.from_dict(s_cat) for s_cat in data['cats']],
-            relationships={Relationship.parse_key(key): Relationship.from_dict(s_rel) for key, s_rel in data['relationships'].items()},
-            edges=[Edge.from_dict(s_edge) for s_edge in data['edges']],
-            nodes=[Node.from_dict(s_node) for s_node in data['nodes']],
-            run=SimulationIter.from_dict(data['run']),
-            stats= SimulationStats.from_dict(data['stats'],)
+            cats=[Cat.from_dict(s_cat) for s_cat in data["cats"]],
+            relationships={
+                Relationship.parse_key(key): Relationship.from_dict(s_rel)
+                for key, s_rel in data["relationships"].items()
+            },
+            edges=[Edge.from_dict(s_edge) for s_edge in data["edges"]],
+            nodes=[Node.from_dict(s_node) for s_node in data["nodes"]],
+            run=SimulationIter.from_dict(data["run"]),
+            stats=SimulationStats.from_dict(
+                data["stats"],
+            ),
         )
-        
 
 
 class Simulation:
@@ -148,7 +161,9 @@ class Simulation:
         return result
 
     def is_home_of_enemy(self, node_id, cat_id):
-        home_cats = [cat.traits.id for cat in self.state.cats if cat.traits.home == node_id]
+        home_cats = [
+            cat.traits.id for cat in self.state.cats if cat.traits.home == node_id
+        ]
         for cat in home_cats:
             if cat == cat_id:
                 return False
@@ -157,7 +172,9 @@ class Simulation:
         return False
 
     def is_home_of_friend(self, node_id, cat_id):
-        home_cats = [cat.traits.id for cat in self.state.cats if cat.traits.home == node_id]
+        home_cats = [
+            cat.traits.id for cat in self.state.cats if cat.traits.home == node_id
+        ]
         for cat in home_cats:
             if cat == cat_id:
                 return False
@@ -166,7 +183,9 @@ class Simulation:
         return False
 
     def is_neutral_node(self, node_id, cat_id):
-        home_cats = [cat.traits.id for cat in self.state.cats if cat.traits.home == node_id]
+        home_cats = [
+            cat.traits.id for cat in self.state.cats if cat.traits.home == node_id
+        ]
         return len(home_cats) == 0
 
     def get_nodes_edge_partners_no_enemy_home(self, node_id, cat_id):
@@ -196,14 +215,18 @@ class Simulation:
     def get_friends(self, cat1):
         result = []
         for rel in self.state.relationships.values():
-            if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value < -1e-9:
+            if (
+                cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2
+            ) and rel.value < -1e-9:
                 result.append(rel.other_cat(cat1))
         return result
 
     def get_enemies(self, cat1):
         result = []
         for rel in self.state.relationships.values():
-            if (cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2) and rel.value > 1e-9:
+            if (
+                cat1 == rel.traits.cat1 or cat1 == rel.traits.cat2
+            ) and rel.value > 1e-9:
                 result.append(rel.other_cat(cat1))
         return result
 
@@ -212,7 +235,13 @@ class Simulation:
         edge_sigma = self.params.var_edges**0.5
         for i in range(self.params.node_amount):
             number_of_edges = max(
-                1, round(min(random.gauss(self.params.mean_edges, edge_sigma),self.params.node_amount))
+                1,
+                round(
+                    min(
+                        random.gauss(self.params.mean_edges, edge_sigma),
+                        self.params.node_amount,
+                    )
+                ),
             )
             self.state.nodes.append(Node(id=i, number_of_edges=number_of_edges))
 
@@ -275,7 +304,9 @@ class Simulation:
             related_cats.append(available_cats.pop(0))
 
     def serialize_state(self):
-        return json.dumps(fix_tuple_keys_dict(asdict(self.state)),cls=SimulationEncoder)
+        return json.dumps(
+            fix_tuple_keys_dict(asdict(self.state)), cls=SimulationEncoder
+        )
 
     def movement_step(self):
         new_cats = self.state.cats.copy()
@@ -528,7 +559,9 @@ class Simulation:
         ]
 
         relationship_values = [
-            rel.value for rel in self.state.relationships.values() if rel.stats.interacted
+            rel.value
+            for rel in self.state.relationships.values()
+            if rel.stats.interacted
         ]
         mean_relationship_value = (
             0
@@ -557,4 +590,3 @@ class Simulation:
             self.step()
             yield self
         self.calculate_metrics()
-  
