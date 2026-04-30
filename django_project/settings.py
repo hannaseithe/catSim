@@ -42,12 +42,14 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "daphne",
     "django.contrib.staticfiles",
     "cats.apps.CatsConfig",
     "accounts.apps.AccountsConfig",
     "rest_framework",
     "django_filters",
     "drf_spectacular",
+    "channels",
 ]
 
 MIDDLEWARE = [
@@ -218,3 +220,13 @@ CACHES = {
         "LOCATION": "redis://127.0.0.1:6379/1",
     }
 }
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379, 2)],
+        },
+    },
+}
+

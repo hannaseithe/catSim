@@ -17,6 +17,9 @@ arrow==1.4.0
 asgiref==3.11.0
     # via
     #   -r requirements.txt
+    #   channels
+    #   channels-redis
+    #   daphne
     #   django
 attrs==25.4.0
     # via
@@ -24,12 +27,26 @@ attrs==25.4.0
     #   jsonschema
     #   pytest-subtests
     #   referencing
+    #   service-identity
+    #   twisted
+autobahn==25.12.2
+    # via
+    #   -r requirements.txt
+    #   daphne
+automat==25.4.16
+    # via
+    #   -r requirements.txt
+    #   twisted
 billiard==4.2.4
     # via
     #   -r requirements.txt
     #   celery
 build==1.4.0
     # via pip-tools
+cbor2==5.9.0
+    # via
+    #   -r requirements.txt
+    #   autobahn
 celery==5.6.2
     # via -r requirements.txt
 certifi==2026.1.4
@@ -37,6 +54,17 @@ certifi==2026.1.4
     #   httpcore
     #   httpx
     #   requests
+cffi==2.0.0
+    # via
+    #   -r requirements.txt
+    #   autobahn
+    #   cryptography
+channels==4.3.2
+    # via
+    #   -r requirements.txt
+    #   channels-redis
+channels-redis==4.3.0
+    # via -r requirements.txt
 charset-normalizer==3.4.4
     # via requests
 click==8.3.1
@@ -62,11 +90,24 @@ click-repl==0.3.0
     #   celery
 colorama==0.4.6
     # via schemathesis
+constantly==23.10.4
+    # via
+    #   -r requirements.txt
+    #   twisted
 coverage==7.13.2
     # via -r requirements-dev.in
+cryptography==46.0.6
+    # via
+    #   -r requirements.txt
+    #   autobahn
+    #   pyopenssl
+    #   service-identity
+daphne==4.2.1
+    # via -r requirements.txt
 django==6.0
     # via
     #   -r requirements.txt
+    #   channels
     #   django-filter
     #   django-stubs
     #   django-stubs-ext
@@ -102,6 +143,11 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via schemathesis
+hyperlink==21.0.0
+    # via
+    #   -r requirements.txt
+    #   autobahn
+    #   twisted
 hypothesis==6.151.9
     # via
     #   hypothesis-graphql
@@ -113,10 +159,17 @@ hypothesis-jsonschema==0.23.1
     # via schemathesis
 idna==3.11
     # via
+    #   -r requirements.txt
     #   anyio
     #   httpx
+    #   hyperlink
     #   jsonschema
     #   requests
+    #   twisted
+incremental==24.11.0
+    # via
+    #   -r requirements.txt
+    #   twisted
 inflection==0.5.1
     # via
     #   -r requirements.txt
@@ -153,6 +206,11 @@ markupsafe==3.0.3
     # via werkzeug
 mdurl==0.1.2
     # via markdown-it-py
+msgpack==1.1.2
+    # via
+    #   -r requirements.txt
+    #   autobahn
+    #   channels-redis
 mypy==1.19.1
     # via -r requirements-dev.in
 mypy-extensions==1.1.0
@@ -166,6 +224,7 @@ packaging==25.0
     #   -r requirements.txt
     #   build
     #   gunicorn
+    #   incremental
     #   kombu
     #   pytest
     #   wheel
@@ -181,6 +240,23 @@ prompt-toolkit==3.0.52
     #   click-repl
 psycopg2-binary==2.9.11
     # via -r requirements.txt
+py-ubjson==0.16.1
+    # via
+    #   -r requirements.txt
+    #   autobahn
+pyasn1==0.6.3
+    # via
+    #   -r requirements.txt
+    #   pyasn1-modules
+    #   service-identity
+pyasn1-modules==0.4.2
+    # via
+    #   -r requirements.txt
+    #   service-identity
+pycparser==3.0
+    # via
+    #   -r requirements.txt
+    #   cffi
 pygments==2.19.2
     # via
     #   pytest
@@ -189,6 +265,10 @@ pyjwt==2.10.1
     # via
     #   -r requirements.txt
     #   djangorestframework-simplejwt
+pyopenssl==26.0.0
+    # via
+    #   -r requirements.txt
+    #   twisted
 pyproject-hooks==1.2.0
     # via
     #   build
@@ -198,9 +278,12 @@ pyrate-limiter==3.9.0
 pytest==9.0.2
     # via
     #   -r requirements-dev.in
+    #   pytest-asyncio
     #   pytest-django
     #   pytest-subtests
     #   schemathesis
+pytest-asyncio==1.3.0
+    # via -r requirements-dev.in
 pytest-django==4.11.1
     # via -r requirements-dev.in
 pytest-subtests==0.15.0
@@ -218,7 +301,9 @@ pyyaml==6.0.3
     #   drf-spectacular
     #   schemathesis
 redis==7.1.0
-    # via -r requirements.txt
+    # via
+    #   -r requirements.txt
+    #   channels-redis
 referencing==0.37.0
     # via
     #   -r requirements.txt
@@ -243,6 +328,10 @@ ruff==0.14.14
     # via -r requirements-dev.in
 schemathesis==4.10.2
     # via -r requirements-dev.in
+service-identity==24.2.0
+    # via
+    #   -r requirements.txt
+    #   twisted
 six==1.17.0
     # via
     #   -r requirements.txt
@@ -261,6 +350,14 @@ starlette-testclient==0.4.1
     # via schemathesis
 tenacity==9.1.4
     # via schemathesis
+twisted[tls]==25.5.0
+    # via
+    #   -r requirements.txt
+    #   daphne
+txaio==25.12.2
+    # via
+    #   -r requirements.txt
+    #   autobahn
 types-networkx==3.6.1.20251220
     # via -r requirements-dev.in
 types-pyyaml==6.0.12.20250915
@@ -272,9 +369,12 @@ typing-extensions==4.15.0
     #   django-stubs
     #   django-stubs-ext
     #   mypy
+    #   pyopenssl
+    #   pytest-asyncio
     #   referencing
     #   schemathesis
     #   starlette
+    #   twisted
 tzdata==2025.3
     # via
     #   -r requirements.txt
@@ -284,6 +384,10 @@ tzlocal==5.3.1
     # via
     #   -r requirements.txt
     #   celery
+ujson==5.12.0
+    # via
+    #   -r requirements.txt
+    #   autobahn
 uri-template==1.3.0
     # via jsonschema
 uritemplate==4.2.0
@@ -308,6 +412,10 @@ werkzeug==3.1.6
     # via schemathesis
 wheel==0.46.3
     # via pip-tools
+zope-interface==8.2
+    # via
+    #   -r requirements.txt
+    #   twisted
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip

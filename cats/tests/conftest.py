@@ -90,6 +90,17 @@ def auth_client_with_refresh_v1(db):
     return _login
 
 @pytest.fixture
+def auth_client_with_access_v1(db):
+    def _login(user:CustomUser, password):
+        api_client = APIClient()
+        url = reverse('v1-token-obtain-pair')
+        response = api_client.post(url,{"email": user.email, "password":password}, format="json")
+        access_token = response.data["access"]
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+        return api_client,access_token
+    return _login
+
+@pytest.fixture
 def valid_create_sim_args():
     return {
         "uuid": uuid_p.uuid4(),

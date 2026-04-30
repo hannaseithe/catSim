@@ -1,11 +1,15 @@
 from dataclasses import asdict
 import uuid as uuid_p
+from asgiref.sync import async_to_sync
 from celery.result import AsyncResult
+from channels.layers import get_channel_layer
 from django.db import models
 from django.utils import timezone
 
 from cats.events import Action, QueueEvent, Source, StateTransitionEvent
 from django_project import settings
+
+channel_layer = get_channel_layer()
 
 
 class InvalidSimulationState(Exception):
@@ -68,25 +72,32 @@ class SimulationRun(models.Model):
         self.started_at = timezone.now()
         self.save(update_fields=["status", "queued_for", "started_at"])
 
-        event = StateTransitionEvent(old_status=old_status, new_status=self.status, source=source, tick=tick)
-        SimulationEvent.emit_event(run=self,event_type=SimulationEvent.Type.STATE_TRANSITION, content=event)
+        event = StateTransitionEvent(
+            old_status=old_status, new_status=self.status, source=source, tick=tick
+        )
+        SimulationEvent.emit_event(
+            run=self, event_type=SimulationEvent.Type.STATE_TRANSITION, content=event
+        )
 
-
-    def mark_completed(self, source:Source, tick:int):
+    def mark_completed(self, source: Source, tick: int):
         if self.status != self.Status.RUNNING:
             raise InvalidSimulationState(
                 f"Cannot complete simulation in state '{self.status}'"
             )
-        old_status=self.status
+        old_status = self.status
         self.status = self.Status.FINISHED
         self.finished_at = timezone.now()
         self.save(update_fields=["status", "finished_at"])
 
-        event = StateTransitionEvent(old_status=old_status, new_status=self.status, source=source, tick=tick)
-        SimulationEvent.emit_event(run=self,event_type=SimulationEvent.Type.STATE_TRANSITION, content=event)
+        event = StateTransitionEvent(
+            old_status=old_status, new_status=self.status, source=source, tick=tick
+        )
+        SimulationEvent.emit_event(
+            run=self, event_type=SimulationEvent.Type.STATE_TRANSITION, content=event
+        )
 
-    # TODO(API v2): replace finished_at with stopped_at for FAILED state - breaking change 
-    def mark_failed(self, error_message, source: Source, tick:int):
+    # TODO(API v2): replace finished_at with stopped_at for FAILED state - breaking change
+    def mark_failed(self, error_message, source: Source, tick: int):
         if self.status != self.Status.RUNNING:
             raise InvalidSimulationState(
                 f"Cannot fail simulation in state '{self.status}'"
@@ -97,9 +108,16 @@ class SimulationRun(models.Model):
         self.error_message = error_message
         self.save(update_fields=["status", "finished_at", "error_message"])
 
-        event = StateTransitionEvent(old_status=old_status, new_status=self.status, source=source, tick=tick, message=error_message)
-        SimulationEvent.emit_event(run=self,event_type=SimulationEvent.Type.STATE_TRANSITION, content=event)
-
+        event = StateTransitionEvent(
+            old_status=old_status,
+            new_status=self.status,
+            source=source,
+            tick=tick,
+            message=error_message,
+        )
+        SimulationEvent.emit_event(
+            run=self, event_type=SimulationEvent.Type.STATE_TRANSITION, content=event
+        )
 
     def mark_cancelled(self, source: Source):
         if self.status not in (self.Status.RUNNING, self.Status.PENDING):
@@ -111,10 +129,14 @@ class SimulationRun(models.Model):
         self.stopped_at = timezone.now()
         self.save(update_fields=["status", "stopped_at"])
 
-        event = StateTransitionEvent(old_status=old_status, new_status=self.status, source=source, tick=None)
-        SimulationEvent.emit_event(run=self,event_type=SimulationEvent.Type.STATE_TRANSITION, content=event)
+        event = StateTransitionEvent(
+            old_status=old_status, new_status=self.status, source=source, tick=None
+        )
+        SimulationEvent.emit_event(
+            run=self, event_type=SimulationEvent.Type.STATE_TRANSITION, content=event
+        )
 
-    def cancel(self, source:Source):
+    def cancel(self, source: Source):
         if self.status not in (self.Status.RUNNING, self.Status.PENDING):
             raise InvalidSimulationState(
                 f"Cannot cancel simulation in state '{self.status}'"
@@ -128,37 +150,48 @@ class SimulationRun(models.Model):
             raise InvalidSimulationState(
                 f"Cannot pause simulation in state '{self.status}'"
             )
-        old_status =self.status
+        old_status = self.status
         self.status = self.Status.PAUSED
         self.pause_requested = False
         self.stopped_at = timezone.now()
-        self.save(update_fields=['status','pause_requested','stopped_at'])
+        self.save(update_fields=["status", "pause_requested", "stopped_at"])
 
-        event = StateTransitionEvent(old_status=old_status, new_status=self.status, source=source, tick=tick)
-        SimulationEvent.emit_event(run=self,event_type=SimulationEvent.Type.STATE_TRANSITION, content=event)
+        event = StateTransitionEvent(
+            old_status=old_status, new_status=self.status, source=source, tick=tick
+        )
+        SimulationEvent.emit_event(
+            run=self, event_type=SimulationEvent.Type.STATE_TRANSITION, content=event
+        )
 
-    def mark_run_queued(self, source:Source):
-        if self.status not in (self.Status.PENDING, "" ):
+    def mark_run_queued(self, source: Source):
+        if self.status not in (self.Status.PENDING, ""):
             raise InvalidSimulationState(
                 f"Cannot queue simulation for run in state '{self.status}'"
             )
         self.queued_for = self.Queued.RUN
-        self.save(update_fields=['queued_for'])
+        self.save(update_fields=["queued_for"])
 
-        event = QueueEvent(source=source,action=Action.RUN)
-        SimulationEvent.emit_event(run=self,event_type=SimulationEvent.Type.QUEUE, content=event)
+        event = QueueEvent(source=source, action=Action.RUN)
+        SimulationEvent.emit_event(
+            run=self, event_type=SimulationEvent.Type.QUEUE, content=event
+        )
 
-    def mark_resume_queued(self, source:Source):
-        if self.status not in (self.Status.CANCELED, self.Status.PAUSED, self.Status.FAILED):
+    def mark_resume_queued(self, source: Source):
+        if self.status not in (
+            self.Status.CANCELED,
+            self.Status.PAUSED,
+            self.Status.FAILED,
+        ):
             raise InvalidSimulationState(
                 f"Cannot queue simulation for resume in state '{self.status}'"
             )
         self.queued_for = self.Queued.RESUME
-        self.save(update_fields=['queued_for'])
+        self.save(update_fields=["queued_for"])
 
-        event = QueueEvent(source=source,action=Action.RESUME)
-        SimulationEvent.emit_event(run=self,event_type=SimulationEvent.Type.QUEUE, content=event)
-
+        event = QueueEvent(source=source, action=Action.RESUME)
+        SimulationEvent.emit_event(
+            run=self, event_type=SimulationEvent.Type.QUEUE, content=event
+        )
 
 
 class SimulationResults(models.Model):
@@ -167,8 +200,12 @@ class SimulationResults(models.Model):
     )
     metrics = models.JSONField()
 
+
 class SimulationEvent(models.Model):
-    run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name="events")
+    run = models.ForeignKey(
+        SimulationRun, on_delete=models.CASCADE, related_name="events"
+    )
+
     class Type(models.TextChoices):
         PROGRESS = "progress", "Progress"
         STATE_TRANSITION = "state_transition", "State_Transition"
@@ -180,9 +217,16 @@ class SimulationEvent(models.Model):
 
     @staticmethod
     def emit_event(run, event_type, content):
-        SimulationEvent.objects.create(run=run, event_type=event_type, content=asdict(content))
+        SimulationEvent.objects.create(
+            run=run, event_type=event_type, content=asdict(content)
+        )
+        async_to_sync(channel_layer.group_send)(
+            f"run_{run.id}",
+            {
+                "type": "simulation_event",
+                "message": {"event_type": event_type, "content": asdict(content)},
+            },
+        )
 
     class Meta:
-        indexes=[
-            models.Index(fields=["run", "event_type", "logged_at"])
-        ]
+        indexes = [models.Index(fields=["run", "event_type", "logged_at"])]
