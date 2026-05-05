@@ -1,3 +1,5 @@
+import asyncio
+
 from asgiref.sync import sync_to_async
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
@@ -35,3 +37,18 @@ async def test_websocket_consumer(create_user,auth_client_with_access_v1, create
     assert response["message"]["event_type"] == "TEST_EVENT"
 
     await communicator.disconnect() 
+
+@pytest.mark.asyncio
+async def test_websocket_consumer_timeout(settings):
+    settings.WEBSOCKET_TIMEOUT = 0.1
+    
+    #Connect
+    communicator = WebsocketCommunicator(URLRouter(websocket_urlpatterns), "events/1/")
+    connected, subprotocol = await communicator.connect()
+    assert connected
+
+    #Wait
+    await asyncio.sleep(0.2)
+    
+    output = await communicator.receive_output() 
+    assert output["type"] == "websocket.close"

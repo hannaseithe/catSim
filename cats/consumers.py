@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from channels.db import database_sync_to_async
@@ -7,9 +8,20 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 from accounts.models import CustomUser
 from cats.models import SimulationRun
+from django.conf import settings
 
 
 class SimulationConsumer(AsyncWebsocketConsumer):
+
+    async def _auth_timeout(self):
+        await asyncio.sleep(getattr(settings,"WEBSOCKET_TIMEOUT", 5))
+        if not self.authenticated:
+            await self.channel_layer.group_discard(
+                    self.group_name, self.channel_name
+                )
+            await self.close()
+
+
     async def connect(self):
         await self.accept()
         self.run_id = self.scope["url_route"]["kwargs"]["run_id"]
@@ -19,6 +31,8 @@ class SimulationConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(
             self.group_name, self.channel_name
         )
+
+        asyncio.create_task(self._auth_timeout())
 
     async def receive(self, text_data):
         if self.authenticated:

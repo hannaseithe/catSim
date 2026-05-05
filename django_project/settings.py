@@ -230,3 +230,5 @@ CHANNEL_LAYERS = {
     },
 }
 
+WEBSOCKET_TIMEOUT = 5
+
