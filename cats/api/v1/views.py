@@ -468,21 +468,28 @@ class SimulationResultView(APIView):
     serializer_class = SimulationResultSerializerV1
 
     def get(self, request, id=None, simulation_uuid=None):
+        def query_result(id):
+
+            result = get_object_or_404(SimulationResults, run__id=run.id)
+            serializer = SimulationResultSerializerV1(result)
+            return serializer.data
+
+
         if id is not None:
             run = get_object_or_404(SimulationRun, id=id)
         elif simulation_uuid is not None:
             run = get_object_or_404(SimulationRun, uuid=simulation_uuid)
         else:
             return Response({"detail": "No identifier provided."}, status=400)
-
+        
         if run.status != SimulationRun.Status.FINISHED:
             return Response(
                 NOT_COMPLETED_RESPONSE,
                 status=status.HTTP_409_CONFLICT,
             )
-        result = get_object_or_404(SimulationResults, run__id=run.id)
-        serializer = SimulationResultSerializerV1(result)
-        return Response(serializer.data, status=200)
+
+        data = cache.get_or_set(f"result:{run.id}", lambda: query_result(run), timeout=None)
+        return Response(data, status=200)
 
 
 @extend_schema(

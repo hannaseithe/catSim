@@ -140,6 +140,45 @@ def test_simulation_get_results(create_results, create_user, auth_client_with_re
     assert isinstance(data, dict)
     assert data == results_data
 
+@pytest.mark.django_db
+def test_simulation_get_results_caching(create_results, create_user, auth_client_with_refresh_v1):
+    user = create_user(email="test1@email.com",password="test1password")
+    results = create_results(user=user)
+    sim = results.run
+    sim.mark_run_queued(source=Source.WORKER)
+    sim.mark_running(source=Source.WORKER, tick=0)
+    sim.mark_completed(source=Source.WORKER, tick=0)
+    results_data = SimulationResultSerializerV1(results).data
+
+    auth_client, _ = auth_client_with_refresh_v1(user=user, password="test1password")
+    url = reverse("v1-simulation-get-results-id", args=[sim.id])
+    response = auth_client.get(url)
+
+    assert response.status_code == 200
+    data = response.data
+    assert isinstance(data, dict)
+    assert data == results_data
+
+    results.metrics = json.dumps({})
+    results.save()
+
+    response2 = auth_client.get(url)
+
+    assert response2.status_code == 200
+    data = response2.data
+    assert isinstance(data, dict)
+    assert data == results_data
+
+    cache.clear()
+
+    response3 = auth_client.get(url)
+
+    assert response3.status_code == 200
+    data = response3.data
+    assert isinstance(data, dict)
+    assert data != results_data
+
+
 
 @pytest.mark.django_db
 def test_simulation_get_results_if_not_finished(create_results, create_user, auth_client_with_refresh_v1):
