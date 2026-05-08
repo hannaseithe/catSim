@@ -3,6 +3,20 @@
 Simulate the relationships of cats developing over time. Currently this serves mainly the purpose of practicing headless Django and Django REST Framework with a fun little simulation behind it
 
 
+#### [v4.0.0](https://github.com/hannaseithe/catSim/releases/tag/v4.0.0):
+- **Dockerization**: the whole app, as well as celery, redis, postgres, nginx have been dockerized and can now be deployed with docker compose on a server
+- **Internal Event Logging**: simulation runs now emit events that are persisted to the DB. There are three types:
+  - `PROGRESS`: time-interval based emissions of the simulation runs progress
+  - `STATE_TRANSITION`: when a run changes state, e.g. RUNNING > FINISHED
+  - `QUEUE`: when a run is queued for Start or Resume
+- **Websocket Connection**: a authenticated websocket connection allows users to subscribe to the event emission for a specific run
+  - the adress is: `ws://<url>/events/<run_id>/`
+  - authentication is first message based, the message must follow the format: `{"access": "<your-access-token>"}`
+- **New Monitoring Endpoints**:
+  - `GET /api/v1/simulations/health/` - get stats about the API's health
+  - `GET /api/v1/simulations/queue-status/` - get data about the current queue's status
+- **Caching Results Endpoint**: as the most data intensive endpoint with immutable data, the results will be cached indefinitely
+
 #### [v3.0.0](https://github.com/hannaseithe/catSim/releases/tag/v3.0.0):
 - **Checkpointing**: simulation state is saved to the database every N iterations (configurable via `SIMULATION_CHECKPOINT_INTERVAL`), enabling recovery without starting from scratch
 - **Pause/Resume**: simulations can be paused mid-run and resumed from the last checkpoint
