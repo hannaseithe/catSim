@@ -89,9 +89,9 @@ if ENVIRONMENT == "production":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": config("DATABASE_NAME"),
-            "USER": config("DATABASE_USER"),
-            "PASSWORD": config("DATABASE_PASSWORD"),
+            "NAME": config("POSTGRES_NAME"),
+            "USER": config("POSTGRES_USER"),
+            "PASSWORD": config("POSTGRES_PASSWORD"),
             "HOST": config("DATABASE_HOST", default="localhost"),
             "PORT": config("DATABASE_PORT", default="5432"),
         }
@@ -217,7 +217,7 @@ SIMULATION_PROGRESS_INTERVAL_DURATION = 1
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",
+        "LOCATION": config("CACHE_LOCATION", default="redis://127.0.0.1:6379/1"),
     }
 }
 
@@ -225,7 +225,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379, 2)],
+            "hosts": [(config("CHANNEL_LAYER_HOST", default="127.0.0.1"), 6379, 2)],
         },
     },
 }
