@@ -35,7 +35,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /etc/nginx/sites-available/catsim.conf:/etc/nginx/conf.d/default.conf
+      - /etc/nginx/sites-available/catsim:/etc/nginx/conf.d/default.conf
       - /etc/ssl/catsim:/etc/ssl/catsim  
     depends_on:
       - "django-app"
