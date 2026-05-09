@@ -155,10 +155,10 @@ class Edge:
         validate_dict(data, cls)
         return Edge(**data)
 
-    def node_in_edge(self, node_id):
+    def node_in_edge(self, node_id: int) -> bool:
         return node_id == self.node1 or node_id == self.node2
 
-    def other_node(self, node_id):
+    def other_node(self, node_id: int) -> int:
         return self.node1 if self.node2 == node_id else self.node2
 
 
