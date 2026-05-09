@@ -1,7 +1,7 @@
 from dataclasses import asdict
 import dataclasses
 import pytest
-from simulation.state import Cat, CatMetrics, Relationship, RelationshipMetrics
+from simulations.cat_sim_1.state import Cat, CatMetrics, Relationship, RelationshipMetrics
 
 
 def test_cat_instantiation(sample_cat: Cat):

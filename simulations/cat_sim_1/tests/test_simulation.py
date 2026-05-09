@@ -1,7 +1,7 @@
 from dataclasses import asdict
 import json
 
-from simulation.simulation import SimulationState
+from simulations.cat_sim_1.simulation import SimulationState
 
 
 def test_simulation_instantiation(sample_sim):

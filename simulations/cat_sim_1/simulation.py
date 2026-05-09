@@ -4,7 +4,7 @@ import json
 import logging
 import math
 from typing import Optional
-from simulation.state import (
+from simulations.cat_sim_1.state import (
     Cat,
     CatMetrics,
     CatTraits,
@@ -17,7 +17,7 @@ from simulation.state import (
 import random
 import networkx as nx
 
-from simulation.utils import validate_dict
+from simulations.cat_sim_1.utils import validate_dict
 
 logger = logging.getLogger(__name__)
 

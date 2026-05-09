@@ -1,6 +1,6 @@
 import pytest
-from simulation.simulation import Simulation, SimulationParameters
-from simulation.state import Cat, CatTraits, Edge, Node, Relationship, RelationshipTraits
+from simulations.cat_sim_1.simulation import Simulation, SimulationParameters
+from simulations.cat_sim_1.state import Cat, CatTraits, Edge, Node, Relationship, RelationshipTraits
 
 @pytest.fixture
 def sample_cat():

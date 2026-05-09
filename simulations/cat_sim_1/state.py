@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from simulation.utils import validate_dict
+from simulations.cat_sim_1.utils import validate_dict
 
 
 @dataclass

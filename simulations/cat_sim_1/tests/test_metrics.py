@@ -1,4 +1,4 @@
-from simulation.metrics import extract_metrics
+from simulations.cat_sim_1.metrics import extract_metrics
 
 
 def test_extract_metrics(sample_sim):

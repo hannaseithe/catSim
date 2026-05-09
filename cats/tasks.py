@@ -10,8 +10,8 @@ from cats.models import SimulationEvent, SimulationResults, SimulationRun
 from django.db import transaction
 from django.db.models import Q
 from django.conf import settings
-from simulation.metrics import extract_metrics
-from simulation.simulation import Simulation, SimulationParameters, SimulationState
+from simulations.cat_sim_1.metrics import extract_metrics
+from simulations.cat_sim_1.simulation import Simulation, SimulationParameters, SimulationState
 
 import logging
 

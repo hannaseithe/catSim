@@ -1,5 +1,5 @@
 from dataclasses import asdict
-from simulation.simulation import Simulation
+from simulations.cat_sim_1.simulation import Simulation
 
 
 def extract_metrics(sim:Simulation):
