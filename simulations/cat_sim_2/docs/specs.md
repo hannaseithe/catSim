@@ -149,10 +149,18 @@ Formula: Need level + trait level x scale multiplier
 ## Movement
 
 ### Movement Choice
+To decide, a cat scores all known nodes (including its current one) and picks the highest scoring node:
+
+Each tick a cat makes one decision: **move** to an adjacent node, or **act** at its current node. A cat cannot do both in the same tick.
+
 A cat moves to(wards) the node which can satisfy its needs best. There is a `edge tax` - the more edges we have to cross to get to the node, the higher is the tax (additive). The node with the highest node score wins.
 - node score = need satisfaction value - (edge tax × distance)
 - need satisfaction value: weighted sum across all needs (how will the needs be affected at this node?), primary need gets highest weight
     -formula: planned action effects on needs (where highest priority need gets higher weight multiplier and maybe second highes too)+ event-effect on need * probability (if even has no fixed probability, but depends on actions of another cat, probability is assumed to be 0.1) 
+
+Each tick a cat makes one decision: **move** to an adjacent node, or **act** at its current node — not both.
+- If the highest scoring node is the current node → cat acts there this tick
+- If the highest scoring node is a different node → cat moves one edge in that direction this tick (no action)
 
 
 ### Pathfinding & Spatial Memory
@@ -182,6 +190,7 @@ A cat moves to(wards) the node which can satisfy its needs best. There is a `edg
 - If multiple unknown adjacent nodes are candidates, one is chosen at random
 
 ## Actions
+Performing an action means the cat stays at its current node that tick (no movement).
 ### Action Types
 - sleep/rest
     - need effects:
@@ -250,7 +259,7 @@ A cat moves to(wards) the node which can satisfy its needs best. There is a `edg
 
 
 ## Events
-Are probabilistic or deterministic (actions by other cats, which have a fixed assumed probability used for movement choice) events that happen to the cat, which it did not chose itself. 
+Are probabilistic or deterministic (actions by other cats, which have a fixed assumed probability used for movement choice) events that happen to the cat, which it did not chose itself. Events fire at the node a cat arrives at (moving cats) or at the current node (stationary cats).
 
 ### Event Types
 - Cat attack
