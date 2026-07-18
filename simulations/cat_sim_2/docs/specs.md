@@ -153,10 +153,10 @@ To decide, a cat scores all known nodes (including its current one) and picks th
 
 Each tick a cat makes one decision: **move** to an adjacent node, or **act** at its current node. A cat cannot do both in the same tick.
 
-A cat moves to(wards) the node which can satisfy its needs best. There is a `edge tax` - the more edges we have to cross to get to the node, the higher is the tax (additive). The node with the highest node score wins.
+A cat moves to(wards) the node which can satisfy its needs best. There is an `edge tax` - the more edges we have to cross to get to the node, the higher is the tax (additive). The node with the highest node score wins.
 - node score = need satisfaction value - (edge tax × distance)
-- need satisfaction value: weighted sum across all needs (how will the needs be affected at this node?), primary need gets highest weight
-    -formula: planned action effects on needs (where highest priority need gets higher weight multiplier and maybe second highes too)+ event-effect on need * probability (if even has no fixed probability, but depends on actions of another cat, probability is assumed to be 0.1) 
+- need satisfaction value: sum across all needs (how will the needs be affected at this node?)
+    -formula: planned action effects on needs + event-effect on need * probability (if even has no fixed probability, but depends on actions of another cat, probability is assumed to be 0.1) 
 
 Each tick a cat makes one decision: **move** to an adjacent node, or **act** at its current node — not both.
 - If the highest scoring node is the current node → cat acts there this tick
@@ -165,11 +165,12 @@ Each tick a cat makes one decision: **move** to an adjacent node, or **act** at 
 
 ### Pathfinding & Spatial Memory
 - A cat has an internal memory map of nodes it has visited — append-only, never forgotten
-- Unvisited nodes do not exist in the cat's decision space
+- Unvisited nodes do not exist in the cat's decision space (except ajdacent univisited nodes - there we only know they exist, but no other qualities of the node)
 - New nodes are discovered by physically moving to an adjacent unvisited node
 - Each known node stores:
     - **Last seen cats**: which cats were present on last visit — persists indefinitely until updated by a new visit
     - **Novelty score**: familiarity with the node (see below)
+    - **Adjacent nodes**: known and unknown next nodes
 - Movement decisions only consider nodes in the cat's memory map
 - Remembered cats feed into node scoring:
     - Nodes with remembered friendly cats: `greet cat` and `play with/groom cat` count towards the node's need satisfaction value
@@ -203,6 +204,7 @@ Performing an action means the cat stays at its current node that tick (no movem
     - need effects:
         - energy: -5
         - hunt: +20
+        - food: +20 (*hunt success probability)
 - investigate
     - need effects:
         - exploration: +20 (*novelty score of node)
@@ -254,7 +256,9 @@ Performing an action means the cat stays at its current node that tick (no movem
 - Passive effects: Health: +0.1/tick
 
 #### Garden/Woods
-- Available actions: sleep/rest, hunt, investigate, play, groom, mark territory, greet cat, play with/groom cat, attack cat, go to toilet
+- Available actions: sleep/rest, investigate, play, groom, mark territory, go to toilet
+- conditional actions: greet cat, play with/groom cat, attack cat
+- uncertain actions: hunt (availability prob)
 - Not available: eat, get pet by human
 
 
@@ -298,4 +302,9 @@ Are probabilistic or deterministic (actions by other cats, which have a fixed as
         - Energy: -10
 
 ## Relationships
--10 to 10
+- 10 to 10
+- mechanics basically as in cat_sim_1
+
+
+## Glossar
+- `Scale Multiplier`: It's the number you multiply the trait value by before adding it to the need's urgency score. I permanently shifts a cats need levels based on its traits

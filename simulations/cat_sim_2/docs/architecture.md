@@ -5,10 +5,12 @@
 
 ## Simulation Phases (per tick)
 
-1. **Decision** — each cat scores all candidate nodes and decides: move or act
-2. **Movement** — moving cats traverse one edge
-3. **Event** — probabilistic events fire per cat at their current node
-4. **Action** — stationary cats execute their chosen action
+1. **Decision** — each cat scores all candidate nodes and decides: move or act or explore
+    EITHER:
+    2. **Movement** — moving cats traverse one edge
+    OR
+    3. **Event** — probabilistic events fire per cat at their current node
+    4. **Action** — stationary cats execute their chosen action
 5. **Memory update** — cats update their memory maps
 6. **Drain** — need drain rates applied to all cats
 
@@ -46,8 +48,13 @@
 
 ## Decision Phase
 
-- Cat scores all known nodes + adjacent unvisited nodes
+- Cat identifies the first two most pressing need, based on thresholds, trait scale multipliers and need prioritization rules
+- Cat scores all known nodes + adjacent unvisited nodes (if exploration is primary need)
+    - Conditional or uncertain actions get a probability score
+    - event effect are considered based on their probabilities
+    - edge tax is subtracted
 - Highest scoring node wins
+    - Node score = Primary node effect * 3 + secondary node effect
 - If winner = current node → cat acts this tick
 - If winner = other node → cat moves one edge in that direction this tick (BFS determines which adjacent node to move to)
 
