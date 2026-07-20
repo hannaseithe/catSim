@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional
+from enum import Enum
+from typing import List, Optional
 
 from simulations.cat_sim_1.utils import validate_dict
 
@@ -48,11 +49,11 @@ class RelationshipMetrics:
 
 @dataclass(frozen=True)
 class CatTraits:
-    id: int
-    name: str
-    home: int
-    aggressive: float
-    lazy: float
+    aggression: float
+    confidence: float
+    curiosity: float
+    activeness: float
+    strength: float 
 
     @classmethod
     def from_dict(cls, data: dict) -> CatTraits:
@@ -83,14 +84,59 @@ class CatStats:
             **{k:v for k,v in data.items() if k not in ('interacted_with', 'nodes_visited')}
             )
 
+@dataclass
+class CatNeeds:
+    health: float
+    food: float
+    toilet: float
+    energy: float
+    social: float
+    hunt: float
+    exploration: float
+    territory: float
+    hygiene: float
+
+    @classmethod
+    def from_dict(cls, data: dict) -> CatNeeds:
+        validate_dict(data, cls)
+        return CatNeeds(**data)
+
+@dataclass
+class MemoryNode:
+    novelty_score: float
+    last_seen_cats: List[int]
+
+    @classmethod
+    def from_dict(cls, data: dict) -> MemoryNode:
+        validate_dict(data,cls)
+        return MemoryNode(**data)
+
+
+@dataclass
+class CatMemory:
+    visited_nodes: dict[int, MemoryNode]
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> CatMemory:
+        return CatMemory(
+            visited_nodes={
+                int(k): MemoryNode(**v) for k, v in data["visited_nodes"].items()
+            }
+        )
+
 
 @dataclass(eq=False)
-class Cat:
+class Cat:    
+    id: int
+    name: str
+    home: int
     traits: CatTraits
-    current_node: Optional[int] = None
-    target_node: Optional[int] = None
-    needs_to_run:bool = False
+    needs: CatNeeds
+    incapacitated_until: Optional[int]
+    memory: CatMemory
+    current_node: int
     time_at_current_node:int = 0
+    will_move_to: Optional[int] = None
     stats: CatStats = field(default_factory=CatStats)
     metrics: Optional[CatMetrics] = None
 
@@ -116,33 +162,21 @@ class Cat:
     def from_dict(cls, data: dict) -> Cat:
         validate_dict(data, cls)
         return Cat(
+            id=data['id'],
+            name=data['name'],
+            home=data['home'],
             traits=CatTraits.from_dict(data['traits']),
+            needs=CatNeeds.from_dict(data['needs']),
+            incapacitated_until=data['incapacitated_until'],
+            memory=CatMemory.from_dict(data['memory']),
             current_node=data['current_node'],
-            target_node=data['target_node'],
-            needs_to_run=data['needs_to_run'],
             time_at_current_node=data['time_at_current_node'],
             stats= CatStats.from_dict(data['stats']),
             metrics= CatMetrics.from_dict(data['metrics']) if data['metrics'] is not None else None
             )
 
-    def leave(self, target_node):
-        if self.current_node == target_node:
-            raise ValueError(
-                "A cat cannot leave for the same node the cat is already at"
-            )
-        self.current_node = None
-        self.target_node = target_node
-
-    def arrive(self):
-        self.current_node = self.target_node
-        self.target_node = None
-        self.stats.nodes_visited.add(self.current_node)
-
-    def is_on_the_edge(self):
-        return self.current_node is None
-
     def is_at_home(self):
-        return self.current_node == self.traits.home
+        return self.current_node == self.home
 
 
 @dataclass(frozen=True)
@@ -161,11 +195,15 @@ class Edge:
     def other_node(self, node_id: int) -> int:
         return self.node1 if self.node2 == node_id else self.node2
 
+class NodeType(Enum):
+      STREET = "street"
+      HOUSE = "house"
+      GARDEN = "garden"
 
 @dataclass(frozen=True)
 class Node:
     id: int
-    number_of_edges: int
+    node_type: NodeType
 
     @classmethod
     def from_dict(cls, data: dict) -> Node:

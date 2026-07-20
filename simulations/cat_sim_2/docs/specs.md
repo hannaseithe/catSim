@@ -183,6 +183,7 @@ Each tick a cat makes one decision: **move** to an adjacent node, or **act** at 
 - Decreases more on `investigate`
 - Used as a multiplier for the `investigate` action's Exploration effect: `exploration: +20 × novelty score`
 - `investigate` is only available if novelty score > threshold
+- maximum novelty score is 1.0, minimum is 0.0
 
 ### Exploring
 - Adjacent unvisited nodes are always added as candidates to the movement decision
