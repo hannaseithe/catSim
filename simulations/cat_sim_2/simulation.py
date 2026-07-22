@@ -1,5 +1,6 @@
 from __future__ import annotations
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
+from enum import Enum
 import json
 import logging
 import math
@@ -9,11 +10,13 @@ from simulations.cat_sim_2.state import (
     CatMetrics,
     CatTraits,
     Edge,
+    NeedType,
     Node,
     NodeType,
     Relationship,
     RelationshipMetrics,
     RelationshipTraits,
+    TraitType,
 )
 import random
 import networkx as nx
@@ -22,6 +25,20 @@ from simulations.cat_sim_2.utils import validate_dict
 
 logger = logging.getLogger(__name__)
 
+class ActionType(Enum):
+    SLEEP = "sleep"
+    GROOM = "groom"
+    EAT = "eat"
+    HUNT = "hunt"
+    MARK_TERRITORY = "mark_territory"
+    GO_TOILET = "go_toilet"
+    GREET_CAT = "greet_cat"
+    GROOM_CAT = "groom_cat"
+    GET_PET_BY_HUMAN = "get_pet_by_human"
+    PLAY = "play"
+    INVESTIGATE = "investigate"
+    ATTACK_CAT = "attack_cat"
+
 NEED_THRESHOLDS = {
     "satisfied": 100,
     "open": 90,
@@ -29,64 +46,62 @@ NEED_THRESHOLDS = {
     "critical": 10,
 }
 
-SCALE_MULTIPLIERS = {
-    "exploration" : {
-        "curiosity": 2,
-        "confidence": 2
-    },
-    "territory": {
-        "aggression": 2,
-        "confidence": 2
-    },
-    "social": {
-        "aggression": -2,
-        "confidence": 2
-    },
-    "hunt": {
-        "confidence": 2
-    },
-    "hygiene": {}
+SCALE_MULTIPLIERS: dict[NeedType, dict[TraitType, float]] = {
+    NeedType.EXPLORATION: {TraitType.CURIOSITY: 2, TraitType.CONFIDENCE: 2},
+    NeedType.TERRITORY:   {TraitType.AGGRESSION: 2, TraitType.CONFIDENCE: 2},
+    NeedType.SOCIAL:      {TraitType.AGGRESSION: -2, TraitType.CONFIDENCE: 2},
+    NeedType.HUNT:        {TraitType.CONFIDENCE: 2},
+    NeedType.HYGIENE:     {},
 }
 
-NEED_ACTION_OPTIONS = {
-    "health" : ["sleep","groom"],
-    "food": ["eat","hunt"],
-    "toilet": ["mark_territory", "go_toilet"],
-    "energy": ["sleep"],
-    "social": ["greet_cat","groom_cat", "get_pet_by_human"],
-    "hunt": ["hunt", "play"],
-    "exploration": ["investigate"],
-    "territory": ["mark_territory", "greet_cat", "groom_cat", "attack_cat"],
-    "hygiene": ["groom"]
+NEED_ACTION_OPTIONS: dict[NeedType, list[ActionType]] = {
+    NeedType.HEALTH:      [ActionType.SLEEP, ActionType.GROOM],
+    NeedType.FOOD:        [ActionType.EAT, ActionType.HUNT],
+    NeedType.TOILET:      [ActionType.MARK_TERRITORY, ActionType.GO_TOILET],
+    NeedType.ENERGY:      [ActionType.SLEEP],
+    NeedType.SOCIAL:      [ActionType.GREET_CAT, ActionType.GROOM_CAT, ActionType.GET_PET_BY_HUMAN],
+    NeedType.HUNT:        [ActionType.HUNT, ActionType.PLAY],
+    NeedType.EXPLORATION: [ActionType.INVESTIGATE],
+    NeedType.TERRITORY:   [ActionType.MARK_TERRITORY, ActionType.GREET_CAT, ActionType.GROOM_CAT, ActionType.ATTACK_CAT],
+    NeedType.HYGIENE:     [ActionType.GROOM],
 }
 
-NODE_TYPE_ACTIONS = {
-    NodeType.STREET: {"available": ["investigate","mark_territory"], "conditional":[], "uncertain": []},
-    NodeType.HOUSE: {"available": ["sleep", "eat", "groom", "play", "investigate", "get_pet_by_human", "go_toilet", ],
-                     "conditional": ["greet_cat", "groom_cat" , "attack_cat"],
-                     "uncertain": []},
-    NodeType.GARDEN: {"available": ["sleep", "investigate", "play", "groom", "mark_territory", "go_toilet"],
-                      "conditional": ["greet_cat", "groom_cat", "attack_cat"],
-                      "uncertain": ["hunt"]}
+
+NODE_TYPE_ACTIONS: dict[NodeType, dict[str, list[ActionType]]] = {
+    NodeType.STREET: {
+        "available":   [ActionType.INVESTIGATE, ActionType.MARK_TERRITORY],
+        "conditional": [],
+        "uncertain":   [],
+    },
+    NodeType.HOUSE: {
+        "available":   [ActionType.SLEEP, ActionType.EAT, ActionType.GROOM, ActionType.PLAY, ActionType.INVESTIGATE, ActionType.GET_PET_BY_HUMAN, ActionType.GO_TOILET],
+        "conditional": [ActionType.GREET_CAT, ActionType.GROOM_CAT, ActionType.ATTACK_CAT],
+        "uncertain":   [],
+    },
+    NodeType.GARDEN: {
+        "available":   [ActionType.SLEEP, ActionType.INVESTIGATE, ActionType.PLAY, ActionType.GROOM, ActionType.MARK_TERRITORY, ActionType.GO_TOILET],
+        "conditional": [ActionType.GREET_CAT, ActionType.GROOM_CAT, ActionType.ATTACK_CAT],
+        "uncertain":   [ActionType.HUNT],
+    },
 }
 
-ACTION_NEED_EFFECTS:dict[str, dict[str, float]] = {
-    "sleep": {"health": 0.5, "energy": 1.5},
-    "eat": {"food": 40},
-    "hunt": {"energy": -5, "hunt": 20},  # food: +20 * hunt_success_probability handled separately
-    "investigate": {"exploration": 80}, 
-    "play": {"hunt": 10, "energy": -4},
-    "groom": {"hygiene": 10, "health": 0.2},
-    "mark_territory": {"territory": 5, "toilet": 4},
-    "greet_cat": {"social": 5, "territory": 1},
-    "play_with_cat": {"social": 15, "territory": 1},
-    "attack_cat": {"social": -10, "territory": 25},
-    "get_pet": {"social": 5},
-    "go_to_toilet": {"toilet": 80},
+ACTION_NEED_EFFECTS: dict[ActionType, dict[NeedType, float]] = {
+    ActionType.SLEEP:          {NeedType.HEALTH: 0.5, NeedType.ENERGY: 1.5},
+    ActionType.EAT:            {NeedType.FOOD: 40},
+    ActionType.HUNT:           {NeedType.ENERGY: -5, NeedType.HUNT: 20},  # food: +20 * hunt_success_probability handled separately
+    ActionType.INVESTIGATE:    {NeedType.EXPLORATION: 80},
+    ActionType.PLAY:           {NeedType.HUNT: 10, NeedType.ENERGY: -4},
+    ActionType.GROOM:          {NeedType.HYGIENE: 10, NeedType.HEALTH: 0.2},
+    ActionType.MARK_TERRITORY: {NeedType.TERRITORY: 5, NeedType.TOILET: 4},
+    ActionType.GREET_CAT:      {NeedType.SOCIAL: 5, NeedType.TERRITORY: 1},
+    ActionType.GROOM_CAT:      {NeedType.SOCIAL: 15, NeedType.TERRITORY: 1},
+    ActionType.ATTACK_CAT:     {NeedType.SOCIAL: -10, NeedType.TERRITORY: 25},
+    ActionType.GET_PET_BY_HUMAN: {NeedType.SOCIAL: 5},
+    ActionType.GO_TOILET:      {NeedType.TOILET: 80},
 }
 
-ACTION_LIKELIHOOD = {
-    "hunt": 0.2
+ACTION_LIKELIHOOD: dict[ActionType, float] = {
+    ActionType.HUNT: 0.2
 }
 
 EDGE_TAX = 1
@@ -94,51 +109,51 @@ EDGE_TAX = 1
 class EventDict(TypedDict):
     node_type: List[NodeType]
     probability: float
-    need_effects: dict[str, float]
+    need_effects: dict[NeedType, float]
 
 EVENTS: dict[str, EventDict] = {
     "falling_from_tree": {
         "node_type": [NodeType.GARDEN],
         "probability": 0.0005,
-        "need_effects": {"health": -10, "energy": -5},
+        "need_effects": {NeedType.HEALTH: -10, NeedType.ENERGY: -5},
     },
     "hit_by_car": {
         "node_type": [NodeType.STREET],
         "probability": 0.005,
-        "need_effects": {"health": -60},
+        "need_effects": {NeedType.HEALTH: -60},
     },
     "infection": {
         "node_type": [NodeType.GARDEN],
         "probability": 0.0005,
-        "need_effects": {"health": -20},
+        "need_effects": {NeedType.HEALTH: -20},
     },
     "dog_attack": {
         "node_type": [NodeType.GARDEN],
         "probability": 0.001,
-        "need_effects": {"health": -30, "energy": -10},
+        "need_effects": {NeedType.HEALTH: -30, NeedType.ENERGY: -10},
     },
 }
 
-INTERACTIVE_EVENTS:dict[str, EventDict] = {
+INTERACTIVE_EVENTS: dict[str, EventDict] = {
     "cat_attack": {
         "node_type": [NodeType.GARDEN, NodeType.HOUSE],
         "probability": 0.1,  # assumed probability if enemy remembered at node
-        "need_effects": {"health": -10, "social": -5, "territory": -5, "hygiene": -5, "energy": -10},
+        "need_effects": {NeedType.HEALTH: -10, NeedType.SOCIAL: -5, NeedType.TERRITORY: -5, NeedType.HYGIENE: -5, NeedType.ENERGY: -10},
     },
     "greet_cat": {
         "node_type": [NodeType.GARDEN, NodeType.HOUSE],
         "probability": 0.1,  # assumed probability if neutral or friend remembered at node
-        "need_effects": {"social": 3, "territory": 1},
+        "need_effects": {NeedType.SOCIAL: 3, NeedType.TERRITORY: 1},
     },
     "groom_cat": {
         "node_type": [NodeType.GARDEN, NodeType.HOUSE],
         "probability": 0.1,  # assumed probability if friend remembered at node
-        "need_effects": {"social": 3, "territory": 1, "hygiene": 5},
+        "need_effects": {NeedType.SOCIAL: 3, NeedType.TERRITORY: 1, NeedType.HYGIENE: 5},
     },
 }
 
-def _compute_event_expected_effects() -> dict[NodeType, dict[str, float]]:
-    result: dict[NodeType, dict[str, float]] = {nt: {} for nt in NodeType}
+def _compute_event_expected_effects() -> dict[NodeType, dict[NeedType, float]]:
+    result: dict[NodeType, dict[NeedType, float]] = {nt: {} for nt in NodeType}
     for event in EVENTS.values():
         for node_type in event["node_type"]:
             prob = event["probability"]
@@ -146,12 +161,12 @@ def _compute_event_expected_effects() -> dict[NodeType, dict[str, float]]:
                 result[node_type][need] = result[node_type].get(need, 0) + prob * effect
     return result
 
-EVENT_EXPECTED_EFFECTS: dict[NodeType, dict[str, float]] = _compute_event_expected_effects()
+EVENT_EXPECTED_EFFECTS: dict[NodeType, dict[NeedType, float]] = _compute_event_expected_effects()
 
-def urgency_score(cat:Cat, need: Tuple[str,float]):
+def urgency_score(cat:Cat, need: Tuple[NeedType,float]):
     result = need[1]
     for trait, sm in SCALE_MULTIPLIERS[need[0]].items():
-        result += getattr(cat.traits,trait) * sm
+        result += getattr(cat.traits,trait.value) * sm
     return result
 
 
@@ -381,7 +396,7 @@ class Simulation:
                         queue.append((neighbour, distance + 1))
         return 0
 
-    def expected_event_effect(self, cat: Cat, node_id: int, primary_need: str, secondary_need: str) -> float:
+    def expected_event_effect(self, cat: Cat, node_id: int, primary_need: NeedType, secondary_need: NeedType) -> float:
         node_type = self.state.nodes[node_id].node_type
         effects = dict(EVENT_EXPECTED_EFFECTS[node_type])
         #consider the conseqences of other cats possible actions based on cats memory as "events"
@@ -522,39 +537,37 @@ class Simulation:
             if not choice == "stay":
                 cat.stats.times_at_friendly += 1
 
-    def identify_primary_needs(self, cat:Cat):
-        result: list[str] = []
-        need_groups: list[list[str]] =[[],[],[],[]]
-        needs = asdict(cat.needs)
-        first_four = list(needs.items())[:4]
-        last_five = sorted(list(needs.items())[4:], key=lambda need: urgency_score(cat, need), reverse=True)
-        ordered = dict(first_four + last_five)
-        for need, value in ordered.items():
+    def identify_primary_needs(self, cat: Cat) -> tuple[NeedType, NeedType]:
+        result: list[NeedType] = []
+        need_groups: list[list[NeedType]] = [[], [], [], []]
+        needs_list: list[tuple[NeedType, float]] = [
+            (NeedType(f.name), getattr(cat.needs, f.name))
+            for f in fields(cat.needs)
+        ]
+        first_four = needs_list[:4]
+        last_five = sorted(needs_list[4:], key=lambda need: urgency_score(cat, need), reverse=True)
+        ordered = first_four + last_five
+        for need_type, value in ordered:
             if value < NEED_THRESHOLDS['critical']:
-                need_groups[0].append(need)
+                need_groups[0].append(need_type)
                 continue
             if value < NEED_THRESHOLDS['urgent']:
-                need_groups[1].append(need)
+                need_groups[1].append(need_type)
                 continue
             if value < NEED_THRESHOLDS['open']:
-                need_groups[2].append(need)
+                need_groups[2].append(need_type)
                 continue
-            need_groups[3].append(need)
+            need_groups[3].append(need_type)
         for group in need_groups:
-            if len(result) > 1:
+            if len(result) >= 2:
                 break
-            if len(group) == 0:
-                continue
-            if len(group) == 1:
-                result.append(group[0])
-                continue
-            for need in group:
-                if len(result) > 1:
+            for need_type in group:
+                if len(result) >= 2:
                     break
-                result.append(need)
-        return tuple(result)
+                result.append(need_type)
+        return result[0], result[1]
     
-    def get_chosen_node(self, cat: Cat, primary_need: str, secondary_need: str) -> int:
+    def get_chosen_node(self, cat: Cat, primary_need: NeedType, secondary_need: NeedType) -> int:
         node_scores = []
         unknown_adjacent_nodes:Set[int] = set()
         for node_id, m_node in cat.memory.visited_nodes.items():
@@ -626,10 +639,16 @@ class Simulation:
             if cat.will_move_to is not None:
                 cat.current_node = cat.will_move_to
 
-    def event_step(self) -> None:
+    def apply_events(self, node_type: NodeType, cat: Cat) -> None:
         ...
 
 
+    def event_step(self) -> None:
+        cats_copy = self.state.cats.copy()
+        for cat in cats_copy.values():
+            node = self.get_node(cat.current_node)
+            if node is not None:
+                self.apply_events(node.node_type, cat)
 
     def get_possible_pairs(self, cats_on_node: list[Cat]) -> list[tuple[float, int, int]]:
         possible_pairs = []

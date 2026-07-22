@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import List, Optional
 
@@ -46,6 +46,12 @@ class RelationshipMetrics:
         validate_dict(data, cls)
         return RelationshipMetrics(**data)
 
+class TraitType(Enum):
+    AGGRESSION = "aggression"
+    CONFIDENCE = "confidence"
+    CURIOSITY = "curiosity"
+    ACTIVENESS = "activeness"
+    STRENGTH = "strength"
 
 @dataclass(frozen=True)
 class CatTraits:
@@ -59,6 +65,10 @@ class CatTraits:
     def from_dict(cls, data: dict) -> CatTraits:
         validate_dict(data, cls)
         return CatTraits(**data)
+    
+assert {f.name for f in fields(CatTraits)} == {
+    need.value for need in TraitType
+}, "TraitType and CatTraits fields are out of sync."
 
 @dataclass
 class CatStats:
@@ -84,6 +94,17 @@ class CatStats:
             **{k:v for k,v in data.items() if k not in ('interacted_with', 'nodes_visited')}
             )
 
+class NeedType(Enum):
+    HEALTH = "health"
+    FOOD = "food"
+    TOILET = "toilet"
+    ENERGY = "energy"
+    SOCIAL = "social"
+    HUNT = "hunt"
+    EXPLORATION = "exploration"
+    TERRITORY = "territory"
+    HYGIENE = "hygiene"
+
 @dataclass
 class CatNeeds:
     health: float
@@ -100,6 +121,10 @@ class CatNeeds:
     def from_dict(cls, data: dict) -> CatNeeds:
         validate_dict(data, cls)
         return CatNeeds(**data)
+    
+assert {f.name for f in fields(CatNeeds)} == {
+    need.value for need in NeedType
+}, "NeedType and CatNeeds fields are out of sync."
 
 @dataclass
 class MemoryNode:
