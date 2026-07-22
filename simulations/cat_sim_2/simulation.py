@@ -3,7 +3,7 @@ from dataclasses import asdict, dataclass, field
 import json
 import logging
 import math
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple, TypedDict
 from simulations.cat_sim_2.state import (
     Cat,
     CatMetrics,
@@ -91,41 +91,59 @@ ACTION_LIKELIHOOD = {
 
 EDGE_TAX = 1
 
-EVENTS: dict[str, dict] = {
-    "cat_attack": {
-        "node_type": NodeType.GARDEN,
-        "probability": 0.1,  # assumed probability if enemy remembered at node
-        "need_effects": {"health": -10, "social": -5, "territory": -5, "hygiene": -5, "energy": -10},
-    },
+class EventDict(TypedDict):
+    node_type: List[NodeType]
+    probability: float
+    need_effects: dict[str, float]
+
+EVENTS: dict[str, EventDict] = {
     "falling_from_tree": {
-        "node_type": NodeType.GARDEN,
+        "node_type": [NodeType.GARDEN],
         "probability": 0.0005,
         "need_effects": {"health": -10, "energy": -5},
     },
     "hit_by_car": {
-        "node_type": NodeType.STREET,
+        "node_type": [NodeType.STREET],
         "probability": 0.005,
         "need_effects": {"health": -60},
     },
     "infection": {
-        "node_type": NodeType.GARDEN,
+        "node_type": [NodeType.GARDEN],
         "probability": 0.0005,
         "need_effects": {"health": -20},
     },
     "dog_attack": {
-        "node_type": NodeType.GARDEN,
+        "node_type": [NodeType.GARDEN],
         "probability": 0.001,
         "need_effects": {"health": -30, "energy": -10},
+    },
+}
+
+INTERACTIVE_EVENTS:dict[str, EventDict] = {
+    "cat_attack": {
+        "node_type": [NodeType.GARDEN, NodeType.HOUSE],
+        "probability": 0.1,  # assumed probability if enemy remembered at node
+        "need_effects": {"health": -10, "social": -5, "territory": -5, "hygiene": -5, "energy": -10},
+    },
+    "greet_cat": {
+        "node_type": [NodeType.GARDEN, NodeType.HOUSE],
+        "probability": 0.1,  # assumed probability if neutral or friend remembered at node
+        "need_effects": {"social": 3, "territory": 1},
+    },
+    "groom_cat": {
+        "node_type": [NodeType.GARDEN, NodeType.HOUSE],
+        "probability": 0.1,  # assumed probability if friend remembered at node
+        "need_effects": {"social": 3, "territory": 1, "hygiene": 5},
     },
 }
 
 def _compute_event_expected_effects() -> dict[NodeType, dict[str, float]]:
     result: dict[NodeType, dict[str, float]] = {nt: {} for nt in NodeType}
     for event in EVENTS.values():
-        node_type = event["node_type"]
-        prob = event["probability"]
-        for need, effect in event["need_effects"].items():
-            result[node_type][need] = result[node_type].get(need, 0) + prob * effect
+        for node_type in event["node_type"]:
+            prob = event["probability"]
+            for need, effect in event["need_effects"].items():
+                result[node_type][need] = result[node_type].get(need, 0) + prob * effect
     return result
 
 EVENT_EXPECTED_EFFECTS: dict[NodeType, dict[str, float]] = _compute_event_expected_effects()
@@ -363,9 +381,22 @@ class Simulation:
                         queue.append((neighbour, distance + 1))
         return 0
 
-    def expected_event_effect(self, node_id: int, primary_need: str, secondary_need: str) -> float:
+    def expected_event_effect(self, cat: Cat, node_id: int, primary_need: str, secondary_need: str) -> float:
         node_type = self.state.nodes[node_id].node_type
-        effects = EVENT_EXPECTED_EFFECTS[node_type]
+        effects = dict(EVENT_EXPECTED_EFFECTS[node_type])
+        #consider the conseqences of other cats possible actions based on cats memory as "events"
+        cat_attack = INTERACTIVE_EVENTS["cat_attack"]
+        cat_greet = INTERACTIVE_EVENTS["greet_cat"]
+        cat_groom = INTERACTIVE_EVENTS["groom_cat"]
+        if self.seen_enemy(cat, node_id) and node_type in cat_attack["node_type"]:
+            for need, value in cat_attack["need_effects"].items():
+                effects[need] += value * cat_attack["probability"]
+        if self.seen_neutral(cat, node_id) and node_type in cat_greet["node_type"]:
+            for need, value in cat_greet["need_effects"].items():
+                effects[need] += value * cat_greet["probability"]
+        if self.seen_friendly(cat,node_id) and node_type in cat_groom["node_type"]:
+            for need, value in cat_groom["need_effects"].items():
+                effects[need] += value * cat_groom["probability"]
         return effects.get(primary_need, 0) * 3 + effects.get(secondary_need, 0)
 
     def get_relationship(self, cat1, cat2):
@@ -569,7 +600,7 @@ class Simulation:
                         action_score = a_s
                         chosen_action = action 
             if chosen_action: 
-                node_score = a_s - EDGE_TAX * self.memory_distance(cat,node_id) - self.expected_event_effect(node_id,primary_need,secondary_need)
+                node_score = a_s - EDGE_TAX * self.memory_distance(cat,node_id) - self.expected_event_effect(cat,node_id,primary_need,secondary_need)
                 node_scores.append((node_id,node_score))
         if primary_need == "exploration":
             for node_id in unknown_adjacent_nodes:
@@ -589,22 +620,16 @@ class Simulation:
             else: 
                 cat.will_move_to = node_id
 
+    def movement_step(self) -> None:
+        cats_copy = self.state.cats.copy()
+        for cat in cats_copy.values():
+            if cat.will_move_to is not None:
+                cat.current_node = cat.will_move_to
 
-    # def movement_step(self) -> None :
-    #     #TODO: Adapt / implement
-    #     cats_copy = self.state.cats.copy()
-    #     for cat in cats_copy:
-    #         if not cat.is_on_the_edge():
+    def event_step(self) -> None:
+        ...
 
-    #             probs_nodes = self.get_probs_for_neighboring_nodes(cat)   
-    #             prob_to_stay = self.get_prob_to_stay(cat)
-    #             choice = self.make_choice(probs_nodes,prob_to_stay)
-    #             self.set_stats_at_node(cat, choice)
-    #             if choice != "stay":
-    #                 cat.leave(choice)
-    #         else:
-    #             cat.arrive()
-    #             cat.stats.iter_on_edge += 1
+
 
     def get_possible_pairs(self, cats_on_node: list[Cat]) -> list[tuple[float, int, int]]:
         possible_pairs = []
@@ -612,7 +637,7 @@ class Simulation:
             for index2 in range(index1 + 1, len(cats_on_node)):
                 cat2 = cats_on_node[index2]
 
-                rel = self.get_relationship(cat1.id, cat2.id)
+                #rel = self.get_relationship(cat1.id, cat2.id)
                 mutual_intent = 0.0
                 # mutual_intent = (
                 #     cat1.traits.aggressive * rel.value

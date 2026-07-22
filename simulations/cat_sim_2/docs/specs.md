@@ -233,6 +233,7 @@ Performing an action means the cat stays at its current node that tick (no movem
     - need effects:
         - social: -10
         - territory: +25
+        - Health: -3 + (defender Strength - attacker Strength) × SM
 - get pet by human
     - need effects:
         - social: +5
@@ -240,7 +241,31 @@ Performing an action means the cat stays at its current node that tick (no movem
     - need effects:
         - toilet: +80
 
+### Action effects on other cats
+All three interactive actions (greet_*, groom_*, attack_*) do impact the relationship value between the two cats and they have also effects on the other cat
+#### attack_cat
+    - Assumed Probability: 0.1 If node is associated with enemy cat
+    - Need effects on defender:
+        - Health: -10 + (attacker Strength - defender Strength) × SM
+        - Social: -5
+        - Territory: -5
+        - Hygiene: -5
+        - Energy: -10
+    - Relationship Effect: -2
 
+#### greet_cat
+    - Assumed Probability: 0.1 If node is associated with enemy cat
+    - Need effects on receipient:
+        - Social: +3
+        - Territory: +1
+    - Relationship Effect: +0.5
+
+#### groom_cat
+    - Assumed Probability: 0.1 If node is associated with enemy cat
+    - Need effects on receipient:
+        - Social: +5
+        - Territory: +1
+    - Relationship Effect: +2
 
 ## Nodes
 ### Node Types
@@ -267,18 +292,7 @@ Performing an action means the cat stays at its current node that tick (no movem
 Are probabilistic or deterministic (actions by other cats, which have a fixed assumed probability used for movement choice) events that happen to the cat, which it did not chose itself. Events fire at the node a cat arrives at (moving cats) or at the current node (stationary cats).
 
 ### Event Types
-- Cat attack
-    - Node: Garden/Woods 
-    - Assumed Probability: 0.1 If node is associated with enemy cat
-    - Need effects on defender:
-        - Health: -10 + (attacker Strength - defender Strength) × SM
-        - Social: -5
-        - Territory: -5
-        - Hygiene: -5
-        - Energy: -10
-    - Need effects on attacker:
-        - Health: -3 + (defender Strength - attacker Strength) × SM
-    - Relationship Effect: -2
+
 - Falling from tree
     - Node: Garden/Woods
     - Probability: 0.0005
