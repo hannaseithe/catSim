@@ -284,7 +284,7 @@ All three interactive actions (greet_*, groom_*, attack_*) do impact the relatio
 #### Garden/Woods
 - Available actions: sleep/rest, investigate, play, groom, mark territory, go to toilet
 - conditional actions: greet cat, play with/groom cat, attack cat
-- uncertain actions: hunt (availability prob)
+- uncertain actions: hunt (availability prob of 0.2)
 - Not available: eat, get pet by human
 
 

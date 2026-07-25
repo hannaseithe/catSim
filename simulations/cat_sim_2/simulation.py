@@ -1,11 +1,11 @@
 from __future__ import annotations
 from dataclasses import asdict, dataclass, field, fields
-from enum import Enum
 import json
 import logging
 import math
 from typing import List, Optional, Set, Tuple, TypedDict
 from simulations.cat_sim_2.state import (
+    ActionType,
     Cat,
     CatMetrics,
     CatTraits,
@@ -25,19 +25,6 @@ from simulations.cat_sim_2.utils import validate_dict
 
 logger = logging.getLogger(__name__)
 
-class ActionType(Enum):
-    SLEEP = "sleep"
-    GROOM = "groom"
-    EAT = "eat"
-    HUNT = "hunt"
-    MARK_TERRITORY = "mark_territory"
-    GO_TOILET = "go_toilet"
-    GREET_CAT = "greet_cat"
-    GROOM_CAT = "groom_cat"
-    GET_PET_BY_HUMAN = "get_pet_by_human"
-    PLAY = "play"
-    INVESTIGATE = "investigate"
-    ATTACK_CAT = "attack_cat"
 
 NEED_THRESHOLDS = {
     "satisfied": 100,
@@ -111,6 +98,9 @@ class EventDict(TypedDict):
     probability: float
     need_effects: dict[NeedType, float]
 
+class InteractiveEventDict(EventDict):
+    relationship_effect: float
+
 EVENTS: dict[str, EventDict] = {
     "falling_from_tree": {
         "node_type": [NodeType.GARDEN],
@@ -134,21 +124,24 @@ EVENTS: dict[str, EventDict] = {
     },
 }
 
-INTERACTIVE_EVENTS: dict[str, EventDict] = {
-    "cat_attack": {
+INTERACTIVE_EVENTS: dict[ActionType, InteractiveEventDict] = {
+    ActionType.ATTACK_CAT: {
         "node_type": [NodeType.GARDEN, NodeType.HOUSE],
         "probability": 0.1,  # assumed probability if enemy remembered at node
         "need_effects": {NeedType.HEALTH: -10, NeedType.SOCIAL: -5, NeedType.TERRITORY: -5, NeedType.HYGIENE: -5, NeedType.ENERGY: -10},
+        "relationship_effect": -2,
     },
-    "greet_cat": {
+    ActionType.GREET_CAT: {
         "node_type": [NodeType.GARDEN, NodeType.HOUSE],
         "probability": 0.1,  # assumed probability if neutral or friend remembered at node
         "need_effects": {NeedType.SOCIAL: 3, NeedType.TERRITORY: 1},
+        "relationship_effect": 0.5,        
     },
-    "groom_cat": {
+    ActionType.GROOM_CAT: {
         "node_type": [NodeType.GARDEN, NodeType.HOUSE],
         "probability": 0.1,  # assumed probability if friend remembered at node
         "need_effects": {NeedType.SOCIAL: 3, NeedType.TERRITORY: 1, NeedType.HYGIENE: 5},
+        "relationship_effect": 2,
     },
 }
 
@@ -349,24 +342,64 @@ class Simulation:
                 result.append(cat.id)
         return result
 
+    def is_enemy(self, cat1: int, cat2: int) -> bool:
+        if cat1 == cat2:
+            return False
+        return self.get_relationship(cat1, cat2).value > 1e-9
+
+    def get_enemies_on_node(self, cat:Cat) -> list[int]:
+        return [id for id in self.get_cats_on_node(cat.current_node) if self.is_enemy(cat.id, id)]
+    
+    def is_enemy_here(self, cat: Cat) -> bool:
+        return any(
+            self.get_relationship(cat.id, other_id).value > 1e-9
+            for other_id in self.get_cats_on_node(cat.current_node)
+            if other_id != cat.id
+        )
+
     def seen_enemy(self, cat: Cat, node_id: int) -> bool:
         memory_node = cat.memory.visited_nodes.get(node_id)
         if not memory_node:
             return False
         return any(
-            self.get_relationship(cat.id, other_id).value > 1e-9
+            self.is_enemy(cat.id, other_id)
             for other_id in memory_node.last_seen_cats
-            if other_id != cat.id
         )
 
+    def is_friend(self, cat1: int, cat2: int) -> bool:
+        if cat1 == cat2:
+            return False
+        return self.get_relationship(cat1, cat2).value < -1e-9
+
+    def get_friends_on_node(self, cat:Cat) -> list[int]:
+        return [id for id in self.get_cats_on_node(cat.current_node) if self.is_friend(cat.id, id)]
+    
+    def is_friend_here(self, cat: Cat) -> bool:
+        return any(
+            self.is_friend(cat.id, other_id)
+            for other_id in self.get_cats_on_node(cat.current_node)
+        )
     def seen_friendly(self, cat: Cat, node_id: int) -> bool:
         memory_node = cat.memory.visited_nodes.get(node_id)
         if not memory_node:
             return False
         return any(
-            self.get_relationship(cat.id, other_id).value < -1e-9
+            self.is_friend(cat.id, other_id)
             for other_id in memory_node.last_seen_cats
-            if other_id != cat.id
+        )
+
+    def is_neutral(self, cat1: int, cat2: int) -> bool:
+        if cat1 == cat2:
+            return False
+        return abs(self.get_relationship(cat1, cat2).value) >= -1e-9 and abs(self.get_relationship(cat1,cat2).value) <= 1e-9
+
+    def get_neutral_on_node(self, cat:Cat) -> list[int]:
+        return [id for id in self.get_cats_on_node(cat.current_node) if self.is_neutral(cat.id, id)]
+
+    def is_neutral_here(self, cat: Cat) -> bool:
+        return any(
+            self.is_neutral(cat.id, other_id)
+            for other_id in self.get_cats_on_node(cat.current_node)
         )
 
     def seen_neutral(self, cat: Cat, node_id: int) -> bool:
@@ -374,35 +407,42 @@ class Simulation:
         if not memory_node:
             return False
         return any(
-            abs(self.get_relationship(cat.id, other_id).value) <= 1e-9
+            self.is_neutral(cat.id,other_id)
             for other_id in memory_node.last_seen_cats
-            if other_id != cat.id
         )
 
-    def memory_distance(self, cat: Cat, target_node_id: int) -> int:
+    def memory_distance(self, cat: Cat, target_node_id: int) -> tuple[int, list[int]]:
         known_nodes = cat.memory.visited_nodes
         known_edges = [e for e in self.state.edges if e.node1 in known_nodes or e.node2 in known_nodes]
         visited = {cat.current_node}
         queue = [(cat.current_node, 0)]
+        parent: dict[int, int | None] = {cat.current_node: None}
         while queue:
             node_id, distance = queue.pop(0)
             if node_id == target_node_id:
-                return distance
+                path = []
+                current: int | None = target_node_id
+                while current is not None:
+                    path.append(current)
+                    current = parent[current]
+                path.reverse()
+                return distance, path
             for edge in known_edges:
                 if edge.node_in_edge(node_id):
                     neighbour = edge.other_node(node_id)
                     if neighbour not in visited:
                         visited.add(neighbour)
+                        parent[neighbour] = node_id
                         queue.append((neighbour, distance + 1))
-        return 0
+        return 0, []
 
     def expected_event_effect(self, cat: Cat, node_id: int, primary_need: NeedType, secondary_need: NeedType) -> float:
         node_type = self.state.nodes[node_id].node_type
         effects = dict(EVENT_EXPECTED_EFFECTS[node_type])
         #consider the conseqences of other cats possible actions based on cats memory as "events"
-        cat_attack = INTERACTIVE_EVENTS["cat_attack"]
-        cat_greet = INTERACTIVE_EVENTS["greet_cat"]
-        cat_groom = INTERACTIVE_EVENTS["groom_cat"]
+        cat_attack = INTERACTIVE_EVENTS[ActionType.ATTACK_CAT]
+        cat_greet = INTERACTIVE_EVENTS[ActionType.GREET_CAT]
+        cat_groom = INTERACTIVE_EVENTS[ActionType.GROOM_CAT]
         if self.seen_enemy(cat, node_id) and node_type in cat_attack["node_type"]:
             for need, value in cat_attack["need_effects"].items():
                 effects[need] += value * cat_attack["probability"]
@@ -414,9 +454,9 @@ class Simulation:
                 effects[need] += value * cat_groom["probability"]
         return effects.get(primary_need, 0) * 3 + effects.get(secondary_need, 0)
 
-    def get_relationship(self, cat1, cat2):
-        key = tuple(sorted((cat1, cat2)))
-        return self.state.relationships.get(key)
+    def get_relationship(self, cat1: int, cat2: int):
+        a, b = sorted((cat1, cat2))
+        return self.state.relationships.get((a,b))
 
     def get_friends(self, cat1: int) -> list [int]:
         result = []
@@ -567,8 +607,12 @@ class Simulation:
                 result.append(need_type)
         return result[0], result[1]
     
-    def get_chosen_node(self, cat: Cat, primary_need: NeedType, secondary_need: NeedType) -> int:
+    def get_chosen_node(self, cat: Cat) -> tuple[int | None, int | None]:
         node_scores = []
+        primary_need = cat.tick_state.primary_need
+        secondary_need = cat.tick_state.secondary_need
+        if primary_need is None or secondary_need is None: 
+            return None, None
         unknown_adjacent_nodes:Set[int] = set()
         for node_id, m_node in cat.memory.visited_nodes.items():
             node = self.state.nodes[node_id]
@@ -589,13 +633,15 @@ class Simulation:
                     possible_actions.append(action)
             if len(possible_actions) == 0:
                 node_score = 0.0
+                chosen_action = None
+                action_score: float = 0.0
             chosen_action = possible_actions[0]
             if len(possible_actions) > 1:
                 action_score = 0.0
                 for action in possible_actions:
-                    if action == "investigate" and primary_need == "exploration":
-                        action_score = ACTION_NEED_EFFECTS["investigate"].get("exploration",0) * m_node.novelty_score
-                        chosen_action = "investigate"
+                    if action == ActionType.INVESTIGATE and primary_need == NeedType.EXPLORATION:
+                        action_score = ACTION_NEED_EFFECTS[ActionType.INVESTIGATE].get(NeedType.EXPLORATION,0.0) * m_node.novelty_score
+                        chosen_action = ActionType.INVESTIGATE
                         continue
                     action_prob = 1.0
                     if action in NODE_TYPE_ACTIONS[node.node_type]["uncertain"]:
@@ -613,35 +659,39 @@ class Simulation:
                         action_score = a_s
                         chosen_action = action 
             if chosen_action: 
-                node_score = a_s - EDGE_TAX * self.memory_distance(cat,node_id) - self.expected_event_effect(cat,node_id,primary_need,secondary_need)
-                node_scores.append((node_id,node_score))
+                distance, path = self.memory_distance(cat,node_id)
+                node_score = action_score - EDGE_TAX * distance - self.expected_event_effect(cat,node_id,primary_need,secondary_need)
+                node_scores.append((node_id,node_score, path[1] if len(path) > 1 else None))
         if primary_need == "exploration":
             for node_id in unknown_adjacent_nodes:
-                node_score = ACTION_NEED_EFFECTS["investigate"].get("exploration",0) - EDGE_TAX * self.memory_distance(cat,node_id)
-                node_scores.append((node_id, node_score))
-        return max(node_scores, key=lambda x: x[1])[0]
+                distance, path = self.memory_distance(cat,node_id)
+                node_score = ACTION_NEED_EFFECTS["investigate"].get("exploration",0) - EDGE_TAX * distance
+                node_scores.append((node_id, node_score, path[1] if len(path) > 1 else None))
+        result = max(node_scores, key=lambda x: x[1])
+        return result[0], result[2] 
 
 
     def decision_step(self) -> None:
         cats_copy = self.state.cats.copy()
         for cat in cats_copy.values():
             # identify primary and secondary need
-            primary_need, secondary_need = self.identify_primary_needs(cat)
-            node_id = self.get_chosen_node(cat, primary_need, secondary_need)
-            if cat.current_node == node_id:
-                cat.will_move_to = None
-            else: 
-                cat.will_move_to = node_id
+            cat.tick_state.primary_need, cat.tick_state.secondary_need = self.identify_primary_needs(cat)
+            # chose node
+            _, next_node = self.get_chosen_node(cat)
+            cat.tick_state.will_move_to = next_node
 
     def movement_step(self) -> None:
         cats_copy = self.state.cats.copy()
         for cat in cats_copy.values():
-            if cat.will_move_to is not None:
-                cat.current_node = cat.will_move_to
+            if cat.tick_state.will_move_to is not None:
+                cat.current_node = cat.tick_state.will_move_to
 
     def apply_events(self, node_type: NodeType, cat: Cat) -> None:
-        ...
-
+        for event in EVENTS.values():
+            if node_type in event["node_type"]:
+                if random.random() < event["probability"]:
+                    for need, value in event["need_effects"].items():
+                        setattr(cat.needs,need.value,getattr(cat.needs,need.value) + value)
 
     def event_step(self) -> None:
         cats_copy = self.state.cats.copy()
@@ -650,34 +700,104 @@ class Simulation:
             if node is not None:
                 self.apply_events(node.node_type, cat)
 
-    def get_possible_pairs(self, cats_on_node: list[Cat]) -> list[tuple[float, int, int]]:
-        possible_pairs = []
-        for index1, cat1 in enumerate(cats_on_node):
-            for index2 in range(index1 + 1, len(cats_on_node)):
-                cat2 = cats_on_node[index2]
+    def action_step(self) -> None:
+        cats_copy = self.state.cats.copy()
+        for cat in cats_copy.values():
+            if cat.tick_state.will_move_to is not None:
+                continue
+            if cat.tick_state.primary_need is None or cat.tick_state.secondary_need is None:
+                continue
+            #figure out action options based on node_type
+            available_actions: list[ActionType] = []
+            m_node = cat.memory.visited_nodes[cat.current_node]
+            if cat.current_node not in cat.memory.visited_nodes:
+                available_actions.append(ActionType.INVESTIGATE)
+            else:
+                node = self.get_node(cat.current_node)
 
-                #rel = self.get_relationship(cat1.id, cat2.id)
-                mutual_intent = 0.0
-                # mutual_intent = (
-                #     cat1.traits.aggressive * rel.value
-                #     + cat2.traits.aggressive * rel.value
-                #     + random.uniform(-0.3, 0.3)
-                # )
-                if mutual_intent > 0.2:
-                    possible_pairs.append(
-                        (mutual_intent, cat1.id, cat2.id)
-                    )
-        return possible_pairs
+                if node is not None:
+                    available_actions.extend(NODE_TYPE_ACTIONS[node.node_type]["available"])
+                    if self.is_enemy_here(cat) and ActionType.ATTACK_CAT in NODE_TYPE_ACTIONS[node.node_type]["conditional"]:
+                        available_actions.append(ActionType.ATTACK_CAT)
+                    if (self.is_neutral_here(cat) or self.is_friend_here(cat)) and ActionType.GREET_CAT in NODE_TYPE_ACTIONS[node.node_type]["conditional"]:
+                        available_actions.append(ActionType.GREET_CAT)
+                    if self.is_friend_here(cat) and ActionType.GROOM_CAT in NODE_TYPE_ACTIONS[node.node_type]["conditional"]:
+                        available_actions.append(ActionType.GROOM_CAT)
+                    if ActionType.HUNT in NODE_TYPE_ACTIONS[node.node_type]["uncertain"]:
+                        if random.random() > 0.2:
+                            available_actions.append(ActionType.HUNT)
+
+            #TODO: chose action based on primary and secondary needs (same formula as in decision_step)
+            
+            if len(available_actions) == 0:
+                action_score: float = 0.0
+                chosen_action = None
+            else:
+                chosen_action = available_actions[0]
+                if len(available_actions) > 1:
+                    action_score = 0.0
+                    for action in available_actions:
+                        if action == ActionType.INVESTIGATE and cat.tick_state.primary_need == NeedType.EXPLORATION:
+                            action_score = ACTION_NEED_EFFECTS[ActionType.INVESTIGATE].get(NeedType.EXPLORATION,0.0) * m_node.novelty_score
+                            chosen_action = ActionType.INVESTIGATE
+                            continue
+                        a_s = (ACTION_NEED_EFFECTS[action].get(cat.tick_state.primary_need,0) * 3 + ACTION_NEED_EFFECTS[action].get(cat.tick_state.secondary_need,0))
+                        if a_s > action_score:
+                            action_score = a_s
+                            chosen_action = action 
+            cat.tick_state.action = chosen_action
+
+
+            if chosen_action is not None:
+                #apply action effects to cat agent
+                for need,value in ACTION_NEED_EFFECTS[chosen_action].items():
+                    setattr(cat.needs,need.value,getattr(cat.needs,need.value) + value)
+                if chosen_action == ActionType.HUNT:
+                    if random.random() > (0.6 + cat.traits.strength/100):
+                        cat.needs.food += 20
+
+                #apply action effects to cat recipient
+                if chosen_action in [ActionType.ATTACK_CAT, ActionType.GREET_CAT, ActionType.GROOM_CAT]:
+                        
+                    if chosen_action == ActionType.ATTACK_CAT:
+                        enemies_on_node = self.get_enemies_on_node(cat)
+                        chosen_cat = enemies_on_node[0]
+                        rel_value = self.get_relationship(cat.id, chosen_cat).value
+                        if len(enemies_on_node) > 1:
+                            for enemy in enemies_on_node[1:]:
+                                if self.get_relationship(cat.id, enemy).value < rel_value:
+                                    chosen_cat = enemy
+                                    rel_value = self.get_relationship(cat.id, enemy).value
+                        cat.tick_state.other_cat = chosen_cat
+                        cat2 = self.get_cat(chosen_cat)
+
+                    if chosen_action == ActionType.GREET_CAT:
+                        friends_and_neutrals_on_node = self.get_friends_on_node(cat)
+                        friends_and_neutrals_on_node += self.get_neutral_on_node(cat)
+                        chosen_cat = random.choice(friends_and_neutrals_on_node)
+                        cat.tick_state.other_cat = chosen_cat
+                        cat2 = self.get_cat(chosen_cat)
+
+                    if chosen_action == ActionType.GROOM_CAT:
+                        friends_on_node = self.get_friends_on_node(cat)
+                        chosen_cat = friends_on_node[0]
+                        rel_value = self.get_relationship(cat.id, chosen_cat).value
+                        if len(friends_on_node) > 1:
+                            for friend in friends_on_node[1:]:
+                                if self.get_relationship(cat.id, friend).value > rel_value:
+                                    chosen_cat = friend
+                                    rel_value = self.get_relationship(cat.id, friend).value
+                        cat.tick_state.other_cat = chosen_cat
+                        cat2 = self.get_cat(chosen_cat)
+                        
+                    if cat2 is not None:
+                        for need, value in INTERACTIVE_EVENTS[chosen_action]["need_effects"].items():
+                            setattr(cat2.needs,need.value,getattr(cat2.needs,need.value) + value)
+                        rel = self.get_relationship(cat.id, cat2.id)
+                        if rel is not None:
+                            rel.value += INTERACTIVE_EVENTS[chosen_action]["relationship_effect"]
     
-    def pair_up_cats(self, possible_pairs: list[tuple[float, int, int]]) -> tuple[list[tuple[int,int]],set[int]]:
-        engaged = set()
-        paired_cats = []
-        for _, i, j in possible_pairs:
-            if i not in engaged and j not in engaged:
-                engaged.add(i)
-                engaged.add(j)
-                paired_cats.append((i, j))
-        return (paired_cats, engaged)
+
 
     def set_general_engagement_stats(self, rel: Relationship) -> None:
         rel.stats.absolute_delta += 0.05
@@ -701,53 +821,6 @@ class Simulation:
         cat2.stats.interacted_with.add(cat1.id)
         if rel.value < rel.stats.min_value:
             rel.stats.min_value = rel.value
-
-    # def engagement_step(self):
-    #     #TODO: delete
-    #     for node in self.state.nodes:
-    #         engaged = set()
-    #         cats_on_node = [self.get_cat(cat) for cat in self.get_cats_on_node(node.id)]
-
-    #         if len(cats_on_node) > 1:
-
-    #             possible_pairs = self.get_possible_pairs(cats_on_node)
-
-    #             possible_pairs.sort(reverse=True)
-
-    #             paired_cats, engaged = self.pair_up_cats(possible_pairs)
-
-    #             for pair in paired_cats:
-
-    #                 c1, c2 = pair
-    #                 cat1 = self.get_cat(c1)
-    #                 cat2 = self.get_cat(c2)
-    #                 rel = self.get_relationship(c1, c2)
-
-    #                 interaction_value = (
-    #                     cat1.traits.aggressive + cat2.traits.aggressive + rel.value
-    #                 )
-
-    #                 self.set_general_engagement_stats(rel)
-                    
-    #                 if interaction_value > 0:
-    #                     #engage in fight
-    #                     if cat1.traits.aggressive > cat2.traits.aggressive:
-    #                         cat2.needs_to_run = True
-    #                     else:
-    #                         cat1.needs_to_run = True
-    #                     rel.value += 0.05
-    #                     rel.value = min(1, rel.value)
-    #                     self.set_fight_stats(cat1, cat2, rel)
-
-    #                 else:
-    #                     #engage in friendly interaction
-    #                     rel.value -= 0.05
-    #                     rel.value = max(-1, rel.value)
-    #                     self.set_friendly_engagement_stats(cat1, cat2, rel)
-
-    #         for cat in cats_on_node:
-    #             if not engaged or cat.traits.id not in engaged:
-    #                 cat.stats.sleeps += 1
 
     def set_relationship_metrics(self, G):
         #TODO: Adapt / Implement
@@ -901,6 +974,7 @@ class Simulation:
         self.action_step()
         self.memory_update_step()
         self.drain_step()
+        self.set_stats_step()
         self.state.run.tick += 1
         if self.state.run.tick == self.params.iterations:
             self.state.run.finished = True

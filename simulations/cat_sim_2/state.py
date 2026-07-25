@@ -149,6 +149,32 @@ class CatMemory:
             }
         )
 
+class ActionType(Enum):
+    SLEEP = "sleep"
+    GROOM = "groom"
+    EAT = "eat"
+    HUNT = "hunt"
+    MARK_TERRITORY = "mark_territory"
+    GO_TOILET = "go_toilet"
+    GREET_CAT = "greet_cat"
+    GROOM_CAT = "groom_cat"
+    GET_PET_BY_HUMAN = "get_pet_by_human"
+    PLAY = "play"
+    INVESTIGATE = "investigate"
+    ATTACK_CAT = "attack_cat"
+
+@dataclass
+class CatTickState:
+    primary_need: Optional[NeedType] = None
+    secondary_need: Optional[NeedType] = None
+    action: Optional[ActionType] = None
+    will_move_to: Optional[int] = None
+    other_cat: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> CatTickState:
+        validate_dict(data,cls)
+        return CatTickState(**data)   
 
 @dataclass(eq=False)
 class Cat:    
@@ -160,8 +186,8 @@ class Cat:
     incapacitated_until: Optional[int]
     memory: CatMemory
     current_node: int
+    tick_state: CatTickState
     time_at_current_node:int = 0
-    will_move_to: Optional[int] = None
     stats: CatStats = field(default_factory=CatStats)
     metrics: Optional[CatMetrics] = None
 
@@ -195,6 +221,7 @@ class Cat:
             incapacitated_until=data['incapacitated_until'],
             memory=CatMemory.from_dict(data['memory']),
             current_node=data['current_node'],
+            tick_state=CatTickState.from_dict(data['tick_state']),
             time_at_current_node=data['time_at_current_node'],
             stats= CatStats.from_dict(data['stats']),
             metrics= CatMetrics.from_dict(data['metrics']) if data['metrics'] is not None else None
