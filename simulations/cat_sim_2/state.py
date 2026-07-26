@@ -106,27 +106,6 @@ class NeedType(Enum):
     HYGIENE = "hygiene"
 
 @dataclass
-class CatNeeds:
-    health: float
-    food: float
-    toilet: float
-    energy: float
-    social: float
-    hunt: float
-    exploration: float
-    territory: float
-    hygiene: float
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CatNeeds:
-        validate_dict(data, cls)
-        return CatNeeds(**data)
-    
-assert {f.name for f in fields(CatNeeds)} == {
-    need.value for need in NeedType
-}, "NeedType and CatNeeds fields are out of sync."
-
-@dataclass
 class MemoryNode:
     novelty_score: float
     last_seen_cats: List[int]
@@ -176,13 +155,20 @@ class CatTickState:
         validate_dict(data,cls)
         return CatTickState(**data)   
 
+    def reset(self):
+        self.primary_need = None
+        self.secondary_need = None
+        self.action = None
+        self.will_move_to = None
+        self.other_cat = None
+
 @dataclass(eq=False)
 class Cat:    
     id: int
     name: str
     home: int
     traits: CatTraits
-    needs: CatNeeds
+    needs: dict[NeedType, float]
     incapacitated_until: Optional[int]
     memory: CatMemory
     current_node: int
@@ -196,18 +182,14 @@ class Cat:
             self.current_node = self.traits.home
         if len(self.stats.nodes_visited) == 0:
             self.stats.nodes_visited.add(self.traits.home)
+        assert set(self.needs.keys()) == set(NeedType)
+
 
     def __str__(self):
-        if self.current_node is not None:
-            return f"{self.traits.name} (n: #{self.current_node})"
-        else:
-            return f"{self.traits.name} -> n #{self.target_node}"
+        return f"{self.name} (n: #{self.current_node})"
 
     def __repr__(self):
-        if self.current_node is not None:
-            return f"{self.traits.name} at node #{self.current_node}"
-        else:
-            return f"{self.traits.name} moving to node #{self.target_node}"
+        return f"{self.name} at node #{self.current_node}"
         
     @classmethod
     def from_dict(cls, data: dict) -> Cat:
@@ -217,7 +199,7 @@ class Cat:
             name=data['name'],
             home=data['home'],
             traits=CatTraits.from_dict(data['traits']),
-            needs=CatNeeds.from_dict(data['needs']),
+            needs={NeedType(k): v for k, v in data['needs'].items()},
             incapacitated_until=data['incapacitated_until'],
             memory=CatMemory.from_dict(data['memory']),
             current_node=data['current_node'],

@@ -233,7 +233,7 @@ Performing an action means the cat stays at its current node that tick (no movem
     - need effects:
         - social: -10
         - territory: +25
-        - Health: -3 + (defender Strength - attacker Strength) × SM
+        - Health: -5 + (defender Strength - attacker Strength) × 0.15
 - get pet by human
     - need effects:
         - social: +5
@@ -246,7 +246,7 @@ All three interactive actions (greet_*, groom_*, attack_*) do impact the relatio
 #### attack_cat
     - Assumed Probability: 0.1 If node is associated with enemy cat
     - Need effects on defender:
-        - Health: -10 + (attacker Strength - defender Strength) × SM
+        - Health: -10 + (attacker Strength - defender Strength) × 0.15
         - Social: -5
         - Territory: -5
         - Hygiene: -5
