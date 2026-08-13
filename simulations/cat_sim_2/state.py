@@ -179,9 +179,9 @@ class Cat:
 
     def __post_init__(self):
         if self.current_node is None:
-            self.current_node = self.traits.home
+            self.current_node = self.home
         if len(self.stats.nodes_visited) == 0:
-            self.stats.nodes_visited.add(self.traits.home)
+            self.stats.nodes_visited.add(self.home)
         assert set(self.needs.keys()) == set(NeedType)
 
 
