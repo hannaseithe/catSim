@@ -230,7 +230,7 @@ def apply_events(node_type: NodeType, cat: Cat) -> None:
                     cat.needs[need] += value
 
 
-def choose_action(primary_need: NeedType, secondary_need: NeedType, available_actions: list[ActionType], m_node: MemoryNode) -> ActionType | None:
+def choose_action(primary_need: NeedType, secondary_need: NeedType, available_actions: list[ActionType], m_node: MemoryNode | None) -> ActionType | None:
     if not available_actions:
         return None
     action_score: float = 0.0
@@ -840,9 +840,8 @@ class Simulation:
                 continue
             available_actions = self.get_available_actions(cat)
             m_node = cat.memory.visited_nodes.get(cat.current_node)
-            if m_node is not None:
-                chosen_action = choose_action(cat.tick_state.primary_need, cat.tick_state.secondary_need, available_actions, m_node)
-                cat.tick_state.action = chosen_action
+            chosen_action = choose_action(cat.tick_state.primary_need, cat.tick_state.secondary_need, available_actions, m_node)
+            cat.tick_state.action = chosen_action
             if chosen_action is not None:
                 for need, value in ACTION_NEED_EFFECTS[chosen_action].items():
                     cat.needs[need] += value
