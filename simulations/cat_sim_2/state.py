@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import defaultdict
 from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import List, Optional
@@ -6,45 +7,33 @@ from typing import List, Optional
 from simulations.cat_sim_1.utils import validate_dict
 
 
+class ActionType(Enum):
+    SLEEP = "sleep"
+    GROOM = "groom"
+    EAT = "eat"
+    HUNT = "hunt"
+    MARK_TERRITORY = "mark_territory"
+    GO_TOILET = "go_toilet"
+    GREET_CAT = "greet_cat"
+    GROOM_CAT = "groom_cat"
+    GET_PET_BY_HUMAN = "get_pet_by_human"
+    PLAY = "play"
+    INVESTIGATE = "investigate"
+    ATTACK_CAT = "attack_cat"
+
 @dataclass
 class CatMetrics:
-    percent_time_spent_home: float
-    percent_time_spent_on_edge: float
-    percent_time_spent_on_neutral_ground: float
-    percent_time_spent_at_friends_house: float
-    average_iter_spent_at_home: float
-    average_iter_spent_at_friends_home: float
-    average_iter_spent_on_neutral_node: float
-    percent_of_cats_interacted_with: float
-    percent_of_friends: float
-    percent_of_enemies: float
-    percent_of_aquaintances: float
-    percent_time_spent_fighting: float
-    percent_time_spent_friendly_interaction: float
-    percent_time_spent_sleeping: float
-    amount_friendgroups: int
-    average_size_friendgroup: float
-    exploration_index: float
-    relationship_entropy: float
+    time_share_by_node_type: dict = field(default_factory=dict)
+    time_share_by_action: dict = field(default_factory=dict)
+    exploration_index: float = 0.0
+    num_cats_interacted_with: int = 0
+    amount_friendgroups: int = 0
+    average_size_friendgroup: float = 0.0
 
     @classmethod
     def from_dict(cls, data: dict) -> CatMetrics:
         validate_dict(data, cls)
         return CatMetrics(**data)
-
-
-@dataclass
-class RelationshipMetrics:
-    stability: float
-    volatility: float
-    min_value: float
-    max_value: float
-    number_of_sign_flips: int
-
-    @classmethod
-    def from_dict(cls, data: dict) -> RelationshipMetrics:
-        validate_dict(data, cls)
-        return RelationshipMetrics(**data)
 
 class TraitType(Enum):
     AGGRESSION = "aggression"
@@ -70,28 +59,23 @@ assert {f.name for f in fields(CatTraits)} == {
     need.value for need in TraitType
 }, "TraitType and CatTraits fields are out of sync."
 
+
 @dataclass
 class CatStats:
-    iter_at_home: int = 0
-    iter_on_edge: int = 0
-    iter_at_friendly: int = 0
-    iter_at_neutral: int = 0
-    fights: int = 0
-    friendly_interaction: int = 0
-    sleeps: int = 0
-    times_at_home: float = 0
-    times_at_friendly: float = 0
-    times_at_neutral: float = 0
-    interacted_with: set = field(default_factory=set)
-    nodes_visited: set = field(default_factory=set)
+    primary_need: dict = field(default_factory= lambda: defaultdict(int))
+    secondary_need: dict = field(default_factory= lambda: defaultdict(int))
+    actions: dict = field(default_factory= lambda: defaultdict(int))
+    times_at: dict = field(default_factory=lambda: defaultdict(int))
+    path: list = field(default_factory=list)
+    move_towards: dict = field(default_factory=lambda: defaultdict(int))
+    interacted_with: dict = field(default_factory=lambda: defaultdict(int))
+    incapacitation: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> CatStats:
         validate_dict(data, cls)
         return CatStats(
-            interacted_with=set(data['interacted_with']),
-            nodes_visited=set(data['nodes_visited']),
-            **{k:v for k,v in data.items() if k not in ('interacted_with', 'nodes_visited')}
+            **{k:v for k,v in data.items()}
             )
 
 class NeedType(Enum):
@@ -127,20 +111,6 @@ class CatMemory:
                 int(k): MemoryNode(**v) for k, v in data["visited_nodes"].items()
             }
         )
-
-class ActionType(Enum):
-    SLEEP = "sleep"
-    GROOM = "groom"
-    EAT = "eat"
-    HUNT = "hunt"
-    MARK_TERRITORY = "mark_territory"
-    GO_TOILET = "go_toilet"
-    GREET_CAT = "greet_cat"
-    GROOM_CAT = "groom_cat"
-    GET_PET_BY_HUMAN = "get_pet_by_human"
-    PLAY = "play"
-    INVESTIGATE = "investigate"
-    ATTACK_CAT = "attack_cat"
 
 @dataclass
 class CatTickState:
@@ -180,8 +150,6 @@ class Cat:
     def __post_init__(self):
         if self.current_node is None:
             self.current_node = self.home
-        if len(self.stats.nodes_visited) == 0:
-            self.stats.nodes_visited.add(self.home)
         assert set(self.needs.keys()) == set(NeedType)
 
 
@@ -257,11 +225,7 @@ class RelationshipTraits:
 
 @dataclass
 class RelationshipStats:
-    absolute_delta: float = 0
-    min_value: float = 0
-    max_value: float = 0
-    number_of_sign_flips: int = 0
-    interacted: bool = False
+    times_interacted: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> RelationshipStats:
@@ -274,14 +238,13 @@ class Relationship:
     traits: RelationshipTraits
     value: int = 0
     stats: RelationshipStats = field(default_factory=RelationshipStats)
-    metrics: Optional[RelationshipMetrics] = None
 
     def __str__(self):
         return f"Relationship: Cat {self.traits.cat1} - Cat {self.traits.cat2}"
 
     def __repr__(self):
         return f"Relationship between Cat {self.traits.cat1} and Cat {self.traits.cat2} - value: {self.value}"
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> Relationship:
         validate_dict(data, cls)
@@ -289,7 +252,6 @@ class Relationship:
             traits=RelationshipTraits.from_dict(data['traits']),
             value=data['value'],
             stats= RelationshipStats.from_dict(data['stats']),
-            metrics= RelationshipMetrics.from_dict(data['metrics']) if data['metrics'] is not None else None
             )
 
     @staticmethod

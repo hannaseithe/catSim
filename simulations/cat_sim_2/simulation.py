@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import json
 import logging
-import math
 from typing import List, Optional, Set, Tuple, TypedDict
 from simulations.cat_sim_2.state import (
     ActionType,
@@ -17,7 +16,6 @@ from simulations.cat_sim_2.state import (
     Node,
     NodeType,
     Relationship,
-    RelationshipMetrics,
     RelationshipTraits,
     TraitType,
 )
@@ -252,12 +250,6 @@ def clamp_needs(cat: Cat) -> None:
         cat.needs[need] = max(0.0, min(100.0, cat.needs[need]))
 
 
-def safe_log(x):
-    if x <= 0:
-        return 0.0
-    return math.log(x)
-
-
 class SimulationEncoder(json.JSONEncoder):
     # method called for unrecognized values
     def default(self, obj):
@@ -376,6 +368,7 @@ class Simulation:
         self.state: SimulationState = SimulationState()
 
         self.metrics: Optional[SimulationMetrics] = None
+        self.adjacency: dict[int, list[int]] = {}
 
     def get_node(self, node_id: int) -> Node | None:
         return self.state.nodes[node_id]
@@ -387,12 +380,14 @@ class Simulation:
                 result.append(edge)
         return result
 
-    def get_neighboring_nodes(self, node_id: int) -> list[int]:
-        result = []
+    def build_adjacency(self) -> None:
+        self.adjacency = {}
         for edge in self.state.edges:
-            if edge.node_in_edge(node_id):
-                result.append(edge.other_node(node_id))
-        return result
+            self.adjacency.setdefault(edge.node1, []).append(edge.node2)
+            self.adjacency.setdefault(edge.node2, []).append(edge.node1)
+
+    def get_neighboring_nodes(self, node_id: int) -> list[int]:
+        return self.adjacency.get(node_id, [])
 
     def is_home_of_enemy(self, node_id: int, cat_id: int) -> bool:
         home_cats = [
@@ -506,30 +501,32 @@ class Simulation:
             for other_id in memory_node.last_seen_cats
         )
 
-    def memory_distance(self, cat: Cat, target_node_id: int) -> tuple[int, list[int]]:
+    def compute_known_distances(self, cat: Cat) -> dict[int, tuple[int, int | None]]:
+        """BFS from cat.current_node over the cat's known subgraph (nodes it has
+        visited, plus their immediate neighbours). Returns, for every node reached,
+        (distance, next_hop) where next_hop is the first step from current_node
+        along the shortest path to that node."""
         known_nodes = cat.memory.visited_nodes
-        known_edges = [e for e in self.state.edges if e.node1 in known_nodes or e.node2 in known_nodes]
-        visited = {cat.current_node}
-        queue = [(cat.current_node, 0)]
-        parent: dict[int, int | None] = {cat.current_node: None}
-        while queue:
-            node_id, distance = queue.pop(0)
-            if node_id == target_node_id:
-                path = []
-                current: int | None = target_node_id
-                while current is not None:
-                    path.append(current)
-                    current = parent[current]
-                path.reverse()
-                return distance, path
-            for edge in known_edges:
-                if edge.node_in_edge(node_id):
-                    neighbour = edge.other_node(node_id)
-                    if neighbour not in visited:
-                        visited.add(neighbour)
-                        parent[neighbour] = node_id
-                        queue.append((neighbour, distance + 1))
-        return 0, []
+        adjacency: dict[int, list[int]] = {}
+        for edge in self.state.edges:
+            if edge.node1 in known_nodes or edge.node2 in known_nodes:
+                adjacency.setdefault(edge.node1, []).append(edge.node2)
+                adjacency.setdefault(edge.node2, []).append(edge.node1)
+
+        start = cat.current_node
+        distances: dict[int, tuple[int, int | None]] = {start: (0, None)}
+        queue = [start]
+        head = 0
+        while head < len(queue):
+            node_id = queue[head]
+            head += 1
+            distance, _ = distances[node_id]
+            for neighbour in adjacency.get(node_id, []):
+                if neighbour not in distances:
+                    next_hop = neighbour if node_id == start else distances[node_id][1]
+                    distances[neighbour] = (distance + 1, next_hop)
+                    queue.append(neighbour)
+        return distances
 
     def expected_event_effect(self, cat: Cat, node_id: int, primary_need: NeedType, secondary_need: NeedType) -> float:
         node_type = self.state.nodes[node_id].node_type
@@ -648,6 +645,7 @@ class Simulation:
     def generate_initial_state(self):
         self.generate_initial_nodes()
         self.generate_initial_edges()
+        self.build_adjacency()
         self.generate_initial_cats()
         self.generate_initial_relationships()
         
@@ -656,22 +654,6 @@ class Simulation:
             fix_tuple_keys_dict(asdict(self.state)), cls=SimulationEncoder
         )
     
-    #TODO
-    def set_stats_at_node(self, cat: Cat, choice: str | int):
-        assert cat.current_node is not None
-        cat.time_at_current_node += 1
-        if cat.is_at_home():
-            cat.stats.iter_at_home += 1
-            if not choice == "stay":
-                cat.stats.times_at_home += 1
-        elif self.is_neutral_node(cat.current_node):
-            cat.stats.iter_at_neutral += 1
-            if not choice == "stay":
-                cat.stats.times_at_neutral += 1
-        else:
-            cat.stats.iter_at_friendly += 1
-            if not choice == "stay":
-                cat.stats.times_at_friendly += 1
 
     
     def get_action_probability(self, cat: Cat, node_id: int, node_type: NodeType, action: ActionType) -> float:
@@ -687,7 +669,7 @@ class Simulation:
             return 0.0
         return 1.0
 
-    def score_node(self, cat: Cat, node_id: int, m_node: MemoryNode, primary_need: NeedType, secondary_need: NeedType) -> tuple[float, int | None]:
+    def score_node(self, cat: Cat, node_id: int, m_node: MemoryNode, primary_need: NeedType, secondary_need: NeedType, known_distances: dict[int, tuple[int, int | None]]) -> tuple[float, int | None]:
         node = self.state.nodes[node_id]
         relevant_actions = set(NEED_ACTION_OPTIONS[primary_need] + NEED_ACTION_OPTIONS[secondary_need])
         possible_actions = [
@@ -708,9 +690,9 @@ class Simulation:
                 a_s = prob * (ACTION_NEED_EFFECTS[action].get(primary_need, 0) * 3 + ACTION_NEED_EFFECTS[action].get(secondary_need, 0))
             if a_s > action_score:
                 action_score = a_s
-        distance, path = self.memory_distance(cat, node_id)
+        distance, next_hop = known_distances.get(node_id, (0, None))
         node_score = action_score - EDGE_TAX * distance + self.expected_event_effect(cat, node_id, primary_need, secondary_need)
-        return node_score, path[1] if len(path) > 1 else None
+        return node_score, next_hop
 
     def primary_need_has_viable_node(self, cat: Cat, need: NeedType) -> bool:
         actions = NEED_ACTION_OPTIONS[need]
@@ -728,6 +710,7 @@ class Simulation:
             return None, None
         if primary_need != NeedType.EXPLORATION and not self.primary_need_has_viable_node(cat, primary_need):
             primary_need = NeedType.EXPLORATION
+        known_distances = self.compute_known_distances(cat)
         node_scores: list[tuple[int, float, int | None]] = []
         unknown_adjacent_nodes: Set[int] = set()
         for node_id, m_node in cat.memory.visited_nodes.items():
@@ -736,7 +719,7 @@ class Simulation:
             for a_node in self.get_neighboring_nodes(node_id):
                 if a_node not in cat.memory.visited_nodes:
                     unknown_adjacent_nodes.add(a_node)
-            node_score, next_node = self.score_node(cat, node_id, m_node, primary_need, secondary_need)
+            node_score, next_node = self.score_node(cat, node_id, m_node, primary_need, secondary_need, known_distances)
             node_scores.append((node_id, node_score, next_node))
         if primary_need == NeedType.EXPLORATION:
             exploration_weight = 3
@@ -747,9 +730,9 @@ class Simulation:
         for node_id in unknown_adjacent_nodes:
             if self.is_home_of_enemy(node_id, cat.id):
                 continue
-            distance, path = self.memory_distance(cat, node_id)
+            distance, next_hop = known_distances.get(node_id, (0, None))
             node_score = ACTION_NEED_EFFECTS[ActionType.INVESTIGATE].get(NeedType.EXPLORATION, 0) * exploration_weight - EDGE_TAX * distance
-            node_scores.append((node_id, node_score, path[1] if len(path) > 1 else None))
+            node_scores.append((node_id, node_score, next_hop))
         result = max(node_scores, key=lambda x: x[1])
         return result[0], result[2] 
 
@@ -828,6 +811,7 @@ class Simulation:
             rel = self.get_relationship(cat.id, cat2.id)
             if rel is not None:
                 rel.value += INTERACTIVE_EVENTS[chosen_action]["relationship_effect"]
+                rel.stats.times_interacted += 1
 
     def action_step(self) -> None:
         cats_copy = self.state.cats.copy()
@@ -905,152 +889,85 @@ class Simulation:
             cat.tick_state.reset()      
             
             
+    def set_stats_step(self):
+        cats_copy = self.state.cats.copy()
+        for cat in cats_copy.values():
+            cat.stats.path.append(cat.current_node)
 
-    #TODO
-    def set_general_engagement_stats(self, rel: Relationship) -> None:
-        rel.stats.absolute_delta += 0.05
-        self.state.stats.total_number_interactions += 1
-        rel.stats.interacted = True
-        if abs(rel.value) < 1e-9:
-            rel.stats.number_of_sign_flips += 1
+            if cat.current_node == cat.home:
+                cat.stats.times_at["home"] += 1
+            else:
+                c_n = self.get_node(cat.current_node)
+                cat.stats.times_at[c_n.node_type] += 1
 
-    def set_fight_stats(self, cat1: Cat, cat2: Cat, rel: Relationship) -> None:
-        cat1.stats.fights += 1
-        cat1.stats.interacted_with.add(cat2.id)
-        cat2.stats.fights += 1
-        cat2.stats.interacted_with.add(cat1.id)
-        if rel.value > rel.stats.max_value:
-            rel.stats.max_value = rel.value
+            cat.stats.actions[cat.tick_state.action] += 1
 
-    def set_friendly_engagement_stats(self, cat1: Cat, cat2: Cat, rel: Relationship) -> None:
-        cat1.stats.friendly_interaction += 1
-        cat1.stats.interacted_with.add(cat2.id)
-        cat2.stats.friendly_interaction += 1
-        cat2.stats.interacted_with.add(cat1.id)
-        if rel.value < rel.stats.min_value:
-            rel.stats.min_value = rel.value
-
-    def set_relationship_metrics(self, G):
-        #TODO: Adapt / Implement
-        for rel in self.state.relationships.values():
-            rel.metrics = RelationshipMetrics(
-                stability=1 / (1 + rel.stats.absolute_delta),
-                volatility=rel.stats.absolute_delta / self.params.iterations,
-                min_value=rel.stats.min_value,
-                max_value=rel.stats.max_value,
-                number_of_sign_flips=rel.stats.number_of_sign_flips,
-            )
-            if abs(rel.value) < -1e-9:
-                G.add_edge(rel.traits.cat1, rel.traits.cat2)
+            cat.stats.primary_need[cat.tick_state.primary_need] +=1
+            cat.stats.secondary_need[cat.tick_state.secondary_need] += 1
 
 
     def set_cat_metrics(self, cliques):
-        #TODO: Adapt / Implement
-        for cat in self.state.cats:
-            total_connections = len(cat.stats.interacted_with)
-            prob_friends = (
-                0
-                if total_connections == 0
-                else len(self.get_friends(cat.traits.id)) / total_connections
+        for cat in self.state.cats.values():
+            cats_cliques = [clique for clique in cliques if cat.id in clique]
+            num_cats_interacted_with = sum(
+                1
+                for rel in self.state.relationships.values()
+                if rel.stats.times_interacted > 0
+                and cat.id in (rel.traits.cat1, rel.traits.cat2)
             )
-            prob_enemies = (
-                0
-                if total_connections == 0
-                else len(self.get_enemies(cat.traits.id)) / total_connections
-            )
-            prob_aqua = 0 if total_connections == 0 else 1 - prob_friends - prob_enemies
-            config = {
-                "percent_time_spent_home": cat.stats.iter_at_home
-                / self.params.iterations,
-                "percent_time_spent_on_edge": cat.stats.iter_on_edge
-                / self.params.iterations,
-                "percent_time_spent_on_neutral_ground": cat.stats.iter_at_neutral
-                / self.params.iterations,
-                "percent_time_spent_at_friends_house": cat.stats.iter_at_friendly
-                / self.params.iterations,
-                "average_iter_spent_at_home": cat.stats.iter_at_home
-                / cat.stats.times_at_home
-                if cat.stats.times_at_home > 0
-                else 0,
-                "average_iter_spent_at_friends_home": cat.stats.iter_at_friendly
-                / cat.stats.times_at_friendly
-                if cat.stats.times_at_friendly > 0
-                else 0,
-                "average_iter_spent_on_neutral_node": cat.stats.iter_at_neutral
-                / cat.stats.times_at_neutral
-                if cat.stats.times_at_neutral > 0
-                else 0,
-                "percent_of_cats_interacted_with": total_connections
-                / (self.params.cat_amount - 1),
-                "percent_of_friends": 0
-                if total_connections == 0
-                else prob_friends / total_connections,
-                "percent_of_enemies": 0
-                if total_connections == 0
-                else prob_enemies / total_connections,
-                "percent_of_aquaintances": 0
-                if total_connections == 0
-                else prob_aqua / total_connections,
-                "percent_time_spent_fighting": cat.stats.fights
-                / self.params.iterations,
-                "percent_time_spent_friendly_interaction": cat.stats.friendly_interaction
-                / self.params.iterations,
-                "percent_time_spent_sleeping": cat.stats.sleeps
-                / self.params.iterations,
-                "exploration_index": len(cat.stats.nodes_visited)
-                / self.params.node_amount,
-                "relationship_entropy": -(
-                    prob_friends * safe_log(prob_friends)
-                    + prob_enemies * safe_log(prob_enemies)
-                    + prob_aqua * safe_log(prob_aqua)
+            cat.metrics = CatMetrics(
+                time_share_by_node_type={
+                    node_type: count / self.params.iterations
+                    for node_type, count in cat.stats.times_at.items()
+                },
+                time_share_by_action={
+                    action: count / self.params.iterations
+                    for action, count in cat.stats.actions.items()
+                },
+                exploration_index=len(set(cat.stats.path)) / self.params.node_amount,
+                num_cats_interacted_with=num_cats_interacted_with,
+                amount_friendgroups=len(cats_cliques),
+                average_size_friendgroup=(
+                    sum(len(clique) for clique in cats_cliques) / len(cats_cliques)
+                    if cats_cliques
+                    else 0
                 ),
-            }
-
-            cats_cliques = [clique for clique in cliques if cat.traits.id in clique]
-
-            config["amount_friendgroups"] = len(cats_cliques)
-
-            config["average_size_friendgroup"] = (
-                0
-                if len(cats_cliques) == 0
-                else sum([len(clique) for clique in cats_cliques])
-                / config["amount_friendgroups"]
             )
-            cat.metrics = CatMetrics(**config)
-
 
     def set_simulation_metrics(self, cliques):
-        #TODO: adapt / implement
+        total_interactions = sum(
+            rel.stats.times_interacted for rel in self.state.relationships.values()
+        )
         max_interactions_per_iteration = self.params.cat_amount // 2  # floor division
         max_total_interactions = self.params.iterations * max_interactions_per_iteration
 
         interaction_density = (
-            self.state.stats.total_number_interactions / max_total_interactions
+            total_interactions / max_total_interactions
+            if max_total_interactions > 0
+            else 0
         )
 
         average_size_friendgroups = (
-            0
-            if len(cliques) == 0
-            else sum([len(clique) for clique in cliques]) / len(cliques)
+            sum(len(clique) for clique in cliques) / len(cliques) if cliques else 0
         )
 
-        largest_group_size = (
-            0 if len(cliques) <= 0 else max(len(clique) for clique in cliques)
+        largest_group_size = max((len(clique) for clique in cliques), default=0)
+
+        isolated_cats_count = sum(
+            1
+            for cat in self.state.cats.values()
+            if cat.metrics.num_cats_interacted_with == 0
         )
 
-        isolated_cats = [
-            cat for cat in self.state.cats if cat.metrics.percent_of_friends == 0
-        ]
-
-        relationship_values = [
+        interacted_values = [
             rel.value
             for rel in self.state.relationships.values()
-            if rel.stats.interacted
+            if rel.stats.times_interacted > 0
         ]
         mean_relationship_value = (
-            0
-            if len(relationship_values) == 0
-            else sum(relationship_values) / len(relationship_values)
+            sum(interacted_values) / len(interacted_values)
+            if interacted_values
+            else 0
         )
 
         self.metrics = SimulationMetrics(
@@ -1058,21 +975,18 @@ class Simulation:
             average_size_friendgroups=average_size_friendgroups,
             largest_group_size=largest_group_size,
             interaction_density=interaction_density,
-            isolated_cats_count=len(isolated_cats),
+            isolated_cats_count=isolated_cats_count,
             mean_relationship_value=mean_relationship_value,
         )
 
-
-    def calculate_metrics(self):  # TODO: implement
-        return
-        #TODO: adapt / implement
+    def calculate_metrics(self):
         G = nx.Graph()
+        G.add_nodes_from(self.state.cats.keys())
+        for rel in self.state.relationships.values():
+            if rel.value > 1e-9:
+                G.add_edge(rel.traits.cat1, rel.traits.cat2)
 
-        G.add_nodes_from(range(self.params.node_amount))
-
-        self.set_relationship_metrics(G)
-
-        cliques = [clique for clique in list(nx.find_cliques(G)) if len(clique) > 2]
+        cliques = [clique for clique in nx.find_cliques(G) if len(clique) > 2]
         self.set_cat_metrics(cliques)
         self.set_simulation_metrics(cliques)
 
@@ -1085,7 +999,7 @@ class Simulation:
         self.memory_update_step()
         self.drain_step()
         self.incapacitation_step()
-        #self.set_stats_step()
+        self.set_stats_step()
         self.state.run.tick += 1
         if self.state.run.tick == self.params.iterations:
             self.state.run.finished = True
